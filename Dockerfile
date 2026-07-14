@@ -8,7 +8,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # 安装依赖（利用缓存）
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 
 # 复制源码并构建前端
@@ -24,7 +24,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # 安装生产依赖
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --prod --frozen-lockfile && pnpm rebuild better-sqlite3
 
 # 复制构建产物和后端代码
