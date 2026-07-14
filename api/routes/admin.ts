@@ -11,6 +11,24 @@ import { authMiddleware, generateToken, verifyPassword } from '../middleware/aut
 const router = Router();
 
 /**
+ * 素材类型 → 数据库列名 映射
+ * img / img_alt / video / video_alt
+ */
+const TYPE_COLUMN: Record<string, string> = {
+  img: 'img_path',
+  img_alt: 'img_path_alt',
+  video: 'video_path',
+  video_alt: 'video_path_alt',
+};
+
+/**
+ * 校验 type 合法性，返回列名；非法返回 null
+ */
+function validateType(type: string): string | null {
+  return TYPE_COLUMN[type] ?? null;
+}
+
+/**
  * POST /api/admin/login
  * 密码校验，返回 Token
  */
@@ -53,7 +71,7 @@ router.get('/points', (req, res) => {
   const rows = db.prepare(`
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
-      m.img_path, m.video_path, m.upload_time
+      m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
     FROM point_info p
     LEFT JOIN point_material m ON p.id = m.point_id
     ${whereClause}
@@ -66,7 +84,9 @@ router.get('/points', (req, res) => {
     lat: number;
     shore_type: string;
     img_path: string | null;
+    img_path_alt: string | null;
     video_path: string | null;
+    video_path_alt: string | null;
     upload_time: string | null;
   }>;
 
@@ -78,9 +98,13 @@ router.get('/points', (req, res) => {
     lat: r.lat,
     shore_type: r.shore_type,
     has_image: !!r.img_path,
+    has_image_alt: !!r.img_path_alt,
     has_video: !!r.video_path,
+    has_video_alt: !!r.video_path_alt,
     img_path: r.img_path,
+    img_path_alt: r.img_path_alt,
     video_path: r.video_path,
+    video_path_alt: r.video_path_alt,
     upload_time: r.upload_time,
   }));
 
@@ -101,7 +125,7 @@ router.get('/point/:id', (req, res) => {
   const row = db.prepare(`
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
-      m.img_path, m.video_path, m.upload_time
+      m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
     FROM point_info p
     LEFT JOIN point_material m ON p.id = m.point_id
     WHERE p.id = ?
@@ -113,7 +137,9 @@ router.get('/point/:id', (req, res) => {
     lat: number;
     shore_type: string;
     img_path: string | null;
+    img_path_alt: string | null;
     video_path: string | null;
+    video_path_alt: string | null;
     upload_time: string | null;
   } | undefined;
 
@@ -127,40 +153,42 @@ router.get('/point/:id', (req, res) => {
     data: {
       ...row,
       has_image: !!row.img_path,
+      has_image_alt: !!row.img_path_alt,
       has_video: !!row.video_path,
+      has_video_alt: !!row.video_path_alt,
     },
   });
 });
 
 /**
- * GET /api/admin/download/:id?type=img|video
+ * GET /api/admin/download/:id?type=img|img_alt|video|video_alt
  * 下载素材（流式传输）
  */
 router.get('/download/:id', (req, res) => {
   const pointId = parseInt(req.params.id);
   const type = req.query.type as string;
+  const column = validateType(type);
 
-  if (isNaN(pointId) || (type !== 'img' && type !== 'video')) {
+  if (isNaN(pointId) || !column) {
     res.status(400).json({ success: false, error: '参数无效' });
     return;
   }
 
   const row = db.prepare(
-    'SELECT img_path, video_path FROM point_material WHERE point_id = ?'
-  ).get(pointId) as { img_path: string | null; video_path: string | null } | undefined;
+    `SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`
+  ).get(pointId) as { rel_path: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ success: false, error: '点位不存在' });
     return;
   }
 
-  const relPath = type === 'img' ? row.img_path : row.video_path;
-  if (!relPath) {
+  if (!row.rel_path) {
     res.status(404).json({ success: false, error: '该类型素材未上传' });
     return;
   }
 
-  const fullPath = path.join(STORAGE_DIR, relPath);
+  const fullPath = path.join(STORAGE_DIR, row.rel_path);
   if (!fs.existsSync(fullPath)) {
     res.status(404).json({ success: false, error: '文件不存在' });
     return;
@@ -181,41 +209,40 @@ router.get('/download/:id', (req, res) => {
 });
 
 /**
- * DELETE /api/admin/material/:id?type=img|video
+ * DELETE /api/admin/material/:id?type=img|img_alt|video|video_alt
  * 删除素材
  */
 router.delete('/material/:id', (req, res) => {
   const pointId = parseInt(req.params.id);
   const type = req.query.type as string;
+  const column = validateType(type);
 
-  if (isNaN(pointId) || (type !== 'img' && type !== 'video')) {
+  if (isNaN(pointId) || !column) {
     res.status(400).json({ success: false, error: '参数无效' });
     return;
   }
 
   const row = db.prepare(
-    'SELECT img_path, video_path FROM point_material WHERE point_id = ?'
-  ).get(pointId) as { img_path: string | null; video_path: string | null } | undefined;
+    `SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`
+  ).get(pointId) as { rel_path: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ success: false, error: '点位不存在' });
     return;
   }
 
-  const relPath = type === 'img' ? row.img_path : row.video_path;
-  if (!relPath) {
+  if (!row.rel_path) {
     res.json({ success: true, message: '无素材需删除' });
     return;
   }
 
   // 删除文件
-  const fullPath = path.join(STORAGE_DIR, relPath);
+  const fullPath = path.join(STORAGE_DIR, row.rel_path);
   if (fs.existsSync(fullPath)) {
     fs.unlinkSync(fullPath);
   }
 
   // 更新数据库
-  const column = type === 'img' ? 'img_path' : 'video_path';
   db.prepare(`
     UPDATE point_material SET ${column} = NULL WHERE point_id = ?
   `).run(pointId);
@@ -224,19 +251,19 @@ router.delete('/material/:id', (req, res) => {
 });
 
 /**
- * GET /api/admin/batch-download?type=img|video
- * 批量下载所有点位的图片或视频素材（zip 流式打包）
- * 文件名规则：point_{id}_{city}_{district}.{ext}
+ * GET /api/admin/batch-download?type=img|img_alt|video|video_alt
+ * 批量下载所有点位的某类型素材（zip 流式打包）
+ * 文件名规则：point_{id}_{city}_{district}_{type}.{ext}
  */
 router.get('/batch-download', (req, res) => {
   const type = req.query.type as string;
-  if (type !== 'img' && type !== 'video') {
-    res.status(400).json({ success: false, error: 'type 参数无效，仅支持 img 或 video' });
+  const column = validateType(type);
+  if (!column) {
+    res.status(400).json({ success: false, error: 'type 参数无效，仅支持 img / img_alt / video / video_alt' });
     return;
   }
 
   // 查询所有已上传该类型素材的点位
-  const column = type === 'img' ? 'img_path' : 'video_path';
   const rows = db.prepare(`
     SELECT p.id, p.city, p.district, m.${column} AS rel_path
     FROM point_info p
@@ -253,8 +280,14 @@ router.get('/batch-download', (req, res) => {
   // 生成 zip 文件名
   const now = new Date();
   const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-  const zipName = type === 'img' ? `images_${ts}.zip` : `videos_${ts}.zip`;
-  const typeLabel = type === 'img' ? '图片' : '视频';
+  const typeLabelMap: Record<string, string> = {
+    img: 'images',
+    img_alt: 'images_alt',
+    video: 'videos',
+    video_alt: 'videos_alt',
+  };
+  const zipName = `${typeLabelMap[type]}_${ts}.zip`;
+  const isVideo = type === 'video' || type === 'video_alt';
 
   // 设置响应头
   res.setHeader('Content-Type', 'application/zip');
@@ -262,7 +295,7 @@ router.get('/batch-download', (req, res) => {
 
   // 创建 archiver 实例（zip 格式，存储模式不压缩视频/已压缩图片）
   const archive = archiver('zip', {
-    store: type === 'video', // 视频已是压缩格式，仅存储不重复压缩
+    store: isVideo, // 视频已是压缩格式，仅存储不重复压缩
   });
 
   // 错误处理
@@ -287,16 +320,16 @@ router.get('/batch-download', (req, res) => {
       skippedCount++;
       continue;
     }
-    // 文件名：point_{id}_{city}_{district}_{shore_type}.{ext}
+    // 文件名：point_{id}_{city}_{district}_{type}.{ext}
     const ext = path.extname(row.rel_path);
     const safeCity = row.city.replace(/[/\\:*?"<>|]/g, '_');
     const safeDistrict = row.district.replace(/[/\\:*?"<>|]/g, '_');
-    const entryName = `point_${row.id}_${safeCity}_${safeDistrict}${ext}`;
+    const entryName = `point_${row.id}_${safeCity}_${safeDistrict}_${type}${ext}`;
     archive.file(fullPath, { name: entryName });
     addedCount++;
   }
 
-  console.log(`[batch-download] ${typeLabel}打包: ${addedCount} 个文件, 跳过 ${skippedCount} 个缺失文件`);
+  console.log(`[batch-download] ${type}打包: ${addedCount} 个文件, 跳过 ${skippedCount} 个缺失文件`);
 
   if (addedCount === 0) {
     // 所有文件都不存在，中断流

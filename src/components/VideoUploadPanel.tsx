@@ -1,6 +1,7 @@
 /**
  * 视频上传面板
  * 仅 mp4，≥100MB直接拦截并弹窗指引，不做任何压缩，分片上传
+ * 通过 type 区分主视频（video）与备选视频（video_alt）。
  */
 import { useState, useRef } from 'react';
 import ProgressBar from '@/components/ProgressBar';
@@ -12,6 +13,8 @@ interface Props {
   onUploadComplete: () => void;
   onNeedConfirm: (callback: () => void) => void;
   onOverLimit: () => void;
+  /** 素材类型：主视频 video（默认）/ 备选视频 video_alt */
+  type?: 'video' | 'video_alt';
 }
 
 const VIDEO_MAX_SIZE = 100 * 1024 * 1024; // 100MB
@@ -23,7 +26,11 @@ export default function VideoUploadPanel({
   onUploadComplete,
   onNeedConfirm,
   onOverLimit,
+  type = 'video',
 }: Props) {
+  const isAlt = type === 'video_alt';
+  const inputId = isAlt ? 'video-input-alt' : 'video-input';
+
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +82,7 @@ export default function VideoUploadPanel({
         originalFile,
         originalFile.name,
         pointId,
-        'video',
+        type,
         fileId,
         (progress) => setUploadProgress(progress)
       );
@@ -97,12 +104,17 @@ export default function VideoUploadPanel({
 
   const isUploading = uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
 
+  const title = isAlt ? '备选视频上传' : '视频上传';
+  const accentColor = isAlt ? 'bg-status-yellow' : 'bg-accent';
+  const borderColor = isAlt ? 'hover:border-status-yellow' : 'hover:border-accent';
+  const successText = isAlt ? '备选视频上传成功' : '视频上传成功';
+
   return (
     <div className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-mono text-sm text-base-100 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-accent"></span>
-          视频上传
+          <span className={`w-2 h-2 rounded-full ${accentColor}`}></span>
+          {title}
         </h3>
         {hasExisting && (
           <span className="text-xs text-status-yellow font-mono">已有视频，将覆盖</span>
@@ -120,16 +132,16 @@ export default function VideoUploadPanel({
         onChange={handleFileSelect}
         disabled={disabled || isUploading}
         className="hidden"
-        id="video-input"
+        id={inputId}
       />
 
       <label
-        htmlFor={disabled || isUploading ? '' : 'video-input'}
+        htmlFor={disabled || isUploading ? '' : inputId}
         className={`
           block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
           ${disabled || isUploading
             ? 'border-base-600 cursor-not-allowed'
-            : 'border-base-500 hover:border-accent hover:bg-base-600/30'
+            : `border-base-500 ${borderColor} hover:bg-base-600/30`
           }
         `}
       >
@@ -140,7 +152,7 @@ export default function VideoUploadPanel({
           </div>
         ) : (
           <div className="text-base-300">
-            <p className="text-sm">点击选择视频</p>
+            <p className="text-sm">点击选择{isAlt ? '备选' : ''}视频</p>
             <p className="text-xs text-base-400 mt-1">MP4 · 最大 100MB</p>
           </div>
         )}
@@ -173,7 +185,7 @@ export default function VideoUploadPanel({
 
       {success && (
         <div className="mt-4 p-3 bg-status-green/10 border border-status-green/30 rounded text-sm text-status-green">
-          视频上传成功
+          {successText}
         </div>
       )}
     </div>

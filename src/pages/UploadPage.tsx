@@ -126,12 +126,18 @@ export default function UploadPage() {
                       <p className="text-base-100 font-mono">{selectedPoint.lat.toFixed(6)}</p>
                     </div>
                   </div>
-                  <div className="pt-2 border-t border-base-600 flex gap-4 text-xs">
+                      <div className="pt-2 border-t border-base-600 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     <span className={selectedPoint.has_image ? 'text-status-green' : 'text-status-red'}>
-                      图片: {selectedPoint.has_image ? '已上传' : '未上传'}
+                      主图: {selectedPoint.has_image ? '已上传' : '未上传'}
+                    </span>
+                    <span className={selectedPoint.has_image_alt ? 'text-status-green' : 'text-status-red'}>
+                      备图: {selectedPoint.has_image_alt ? '已上传' : '未上传'}
                     </span>
                     <span className={selectedPoint.has_video ? 'text-status-green' : 'text-status-red'}>
-                      视频: {selectedPoint.has_video ? '已上传' : '未上传'}
+                      主视频: {selectedPoint.has_video ? '已上传' : '未上传'}
+                    </span>
+                    <span className={selectedPoint.has_video_alt ? 'text-status-green' : 'text-status-red'}>
+                      备视频: {selectedPoint.has_video_alt ? '已上传' : '未上传'}
                     </span>
                   </div>
                 </div>
@@ -143,13 +149,21 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* 右侧：上传区 */}
+          {/* 右侧：上传区（4面板：主图/备选图/主视频/备选视频） */}
           <div className="col-span-2 grid grid-cols-2 gap-4">
             <ImageUploadPanel
               pointId={selectedId}
               hasExisting={!!selectedPoint?.has_image}
               onUploadComplete={loadPoints}
               onNeedConfirm={handleNeedConfirm}
+              type="img"
+            />
+            <ImageUploadPanel
+              pointId={selectedId}
+              hasExisting={!!selectedPoint?.has_image_alt}
+              onUploadComplete={loadPoints}
+              onNeedConfirm={handleNeedConfirm}
+              type="img_alt"
             />
             <VideoUploadPanel
               pointId={selectedId}
@@ -157,6 +171,15 @@ export default function UploadPage() {
               onUploadComplete={loadPoints}
               onNeedConfirm={handleNeedConfirm}
               onOverLimit={() => setShowOverLimit(true)}
+              type="video"
+            />
+            <VideoUploadPanel
+              pointId={selectedId}
+              hasExisting={!!selectedPoint?.has_video_alt}
+              onUploadComplete={loadPoints}
+              onNeedConfirm={handleNeedConfirm}
+              onOverLimit={() => setShowOverLimit(true)}
+              type="video_alt"
             />
           </div>
         </div>

@@ -1,7 +1,7 @@
 /**
  * API 客户端
  */
-import type { PointStatus, PointDetail, ApiResponse } from '@/types';
+import type { PointStatus, PointDetail, ApiResponse, MaterialType } from '@/types';
 
 const TOKEN_KEY = 'uploader_admin_token';
 
@@ -68,7 +68,7 @@ export async function adminFetchPointDetail(id: number): Promise<PointDetail> {
 /**
  * 管理员删除素材
  */
-export async function adminDeleteMaterial(id: number, type: 'img' | 'video'): Promise<void> {
+export async function adminDeleteMaterial(id: number, type: MaterialType): Promise<void> {
   const res = await fetch(`/api/admin/material/${id}?type=${type}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -82,7 +82,7 @@ export async function adminDeleteMaterial(id: number, type: 'img' | 'video'): Pr
  */
 export async function adminDownload(
   id: number,
-  type: 'img' | 'video',
+  type: MaterialType,
   ext: string,
   onProgress: (percent: number) => void
 ): Promise<void> {
@@ -125,7 +125,7 @@ export async function adminDownload(
   onProgress(100);
 }
 
-function getDownloadFileName(id: number, type: 'img' | 'video', ext: string): string {
+function getDownloadFileName(id: number, type: MaterialType, ext: string): string {
   return `point_${id}_${type}${ext}`;
 }
 
@@ -141,11 +141,11 @@ function triggerDownload(blob: Blob, filename: string): void {
 }
 
 /**
- * 管理员批量下载（zip 打包所有点位的图片或视频）
+ * 管理员批量下载（zip 打包所有点位的某类型素材）
  * 由于 zip 流式生成无 Content-Length，用 blob 方式下载后触发保存
  */
 export async function adminBatchDownload(
-  type: 'img' | 'video',
+  type: MaterialType,
 ): Promise<{ count: number; zipName: string }> {
   const res = await fetch(`/api/admin/batch-download?type=${type}`, {
     headers: { Authorization: `Bearer ${getToken()}` },

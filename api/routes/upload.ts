@@ -22,6 +22,31 @@ const VIDEO_MAX_SIZE = 100 * 1024 * 1024;
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 const VIDEO_EXTS = ['.mp4'];
 
+/**
+ * 素材类型 → 数据库列名 映射
+ * img / img_alt / video / video_alt
+ */
+const TYPE_COLUMN: Record<string, string> = {
+  img: 'img_path',
+  img_alt: 'img_path_alt',
+  video: 'video_path',
+  video_alt: 'video_path_alt',
+};
+
+/**
+ * 判断 type 是否为图片类
+ */
+function isImageType(type: string): boolean {
+  return type === 'img' || type === 'img_alt';
+}
+
+/**
+ * 校验 type 合法性，返回列名；非法返回 null
+ */
+function validateType(type: string): string | null {
+  return TYPE_COLUMN[type] ?? null;
+}
+
 // multer 配置：使用内存存储，避免 destination 回调时 req.body 未解析的问题
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -98,14 +123,15 @@ router.post('/complete', async (req, res) => {
     return;
   }
 
-  if (type !== 'img' && type !== 'video') {
+  const column = validateType(type);
+  if (!column) {
     res.status(400).json({ success: false, error: '类型参数非法' });
     return;
   }
 
-  // 后端二次校验文件后缀
+  // 后端二次校验文件后缀（图片类用图片后缀，视频类用视频后缀）
   const ext = path.extname(fileName).toLowerCase();
-  const allowedExts = type === 'img' ? IMAGE_EXTS : VIDEO_EXTS;
+  const allowedExts = isImageType(type) ? IMAGE_EXTS : VIDEO_EXTS;
   if (!allowedExts.includes(ext)) {
     res.status(400).json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
     return;
@@ -157,7 +183,7 @@ router.post('/complete', async (req, res) => {
     });
 
     // 后端二次校验文件大小
-    const maxSize = type === 'img' ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
+    const maxSize = isImageType(type) ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
     if (totalSize > maxSize) {
       fs.unlinkSync(savedFilePath);
       await fse.remove(chunkDir);
@@ -170,11 +196,11 @@ router.post('/complete', async (req, res) => {
 
     // 删除旧素材文件（覆盖上传）
     const existing = db.prepare(
-      'SELECT img_path, video_path FROM point_material WHERE point_id = ?'
-    ).get(pointId) as { img_path: string | null; video_path: string | null } | undefined;
+      `SELECT img_path, img_path_alt, video_path, video_path_alt FROM point_material WHERE point_id = ?`
+    ).get(pointId) as Record<string, string | null> | undefined;
 
     if (existing) {
-      const oldPath = type === 'img' ? existing.img_path : existing.video_path;
+      const oldPath = existing[column];
       if (oldPath) {
         const oldFullPath = path.join(STORAGE_DIR, oldPath);
         if (fs.existsSync(oldFullPath)) {
@@ -184,7 +210,6 @@ router.post('/complete', async (req, res) => {
     }
 
     // 更新数据库
-    const column = type === 'img' ? 'img_path' : 'video_path';
     db.prepare(`
       UPDATE point_material
       SET ${column} = ?, upload_time = datetime('now')

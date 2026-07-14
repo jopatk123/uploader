@@ -5,6 +5,9 @@
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB 分片
 
+/** 素材类型：主图 / 备选图 / 主视频 / 备选视频 */
+export type UploadType = 'img' | 'img_alt' | 'video' | 'video_alt';
+
 export interface UploadProgress {
   phase: 'idle' | 'compressing' | 'uploading' | 'merging' | 'done' | 'error';
   percent: number;
@@ -40,7 +43,7 @@ async function uploadChunk(
   totalChunks: number,
   fileId: string,
   pointId: number,
-  type: 'img' | 'video',
+  type: UploadType,
   fileName: string
 ): Promise<void> {
   const formData = new FormData();
@@ -69,7 +72,7 @@ async function uploadChunk(
 async function completeUpload(
   fileId: string,
   pointId: number,
-  type: 'img' | 'video',
+  type: UploadType,
   fileName: string
 ): Promise<void> {
   const res = await fetch('/api/upload/complete', {
@@ -91,7 +94,7 @@ export async function uploadFile(
   file: Blob,
   originalName: string,
   pointId: number,
-  type: 'img' | 'video',
+  type: UploadType,
   fileId: string,
   onProgress: (progress: UploadProgress) => void
 ): Promise<void> {

@@ -54,6 +54,10 @@ export function initDatabase() {
     )
   `);
 
+  // 迁移：为旧库增加备选素材字段（img_path_alt / video_path_alt）
+  migrateAddColumn('point_material', 'img_path_alt', 'TEXT');
+  migrateAddColumn('point_material', 'video_path_alt', 'TEXT');
+
   // 导入140条固定点位数据（如不存在）
   const insertPoint = db.prepare(
     'INSERT OR IGNORE INTO point_info (id, city, district, lon, lat, shore_type) VALUES (?, ?, ?, ?, ?, ?)'
@@ -69,6 +73,17 @@ export function initDatabase() {
     }
   });
   importAll();
+}
+
+/**
+ * 安全添加列（若已存在则跳过）
+ */
+function migrateAddColumn(table: string, column: string, type: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    console.log(`[db] 迁移: ${table}.${column} 已添加`);
+  }
 }
 
 export { db, DATA_DIR, STORAGE_DIR, TEMP_CHUNK_DIR, DB_PATH };

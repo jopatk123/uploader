@@ -1,8 +1,9 @@
 /**
  * 点位状态点阵组件
  * 140个圆点，绿色=图片+视频全部完成，红色=未全部完成
+ * 点阵上方增加按区域（区县）分组的统计，一眼看出各区域完成进度
  */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { PointStatus } from '@/types';
 
 interface Props {
@@ -11,10 +12,32 @@ interface Props {
   onSelect: (id: number) => void;
 }
 
+interface RegionStat {
+  name: string;
+  total: number;
+  completed: number;
+}
+
 export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const completedCount = points.filter(p => p.has_image && p.has_video).length;
+
+  // 按区县分组统计
+  const regionStats = useMemo<RegionStat[]>(() => {
+    const map = new Map<string, RegionStat>();
+    for (const p of points) {
+      let stat = map.get(p.district);
+      if (!stat) {
+        stat = { name: p.district, total: 0, completed: 0 };
+        map.set(p.district, stat);
+      }
+      stat.total++;
+      if (p.has_image && p.has_video) stat.completed++;
+    }
+    // 按总数降序排列
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [points]);
 
   return (
     <div className="bg-base-700 border border-base-600 rounded-lg p-4">
@@ -33,6 +56,36 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
             未完成
           </span>
         </div>
+      </div>
+
+      {/* 按区域分组统计 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        {regionStats.map(r => {
+          const percent = r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0;
+          const isAllDone = r.completed === r.total;
+          return (
+            <div
+              key={r.name}
+              className="bg-base-800 border border-base-600 rounded-lg p-3"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-mono text-xs text-base-100 truncate">{r.name}</span>
+                <span className={`font-mono text-xs ${isAllDone ? 'text-status-green' : 'text-base-400'}`}>
+                  {r.completed}/{r.total}
+                </span>
+              </div>
+              <div className="h-1.5 bg-base-900 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${isAllDone ? 'bg-status-green' : 'bg-accent'}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <div className="mt-1 text-[10px] text-base-400 font-mono">
+                {isAllDone ? '已完成' : `缺 ${r.total - r.completed} 个`}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-28 gap-1.5" style={{ gridTemplateColumns: 'repeat(28, 1fr)' }}>

@@ -3,6 +3,7 @@
  * 支持 jpg/png/webp，单张上限20MB
  * EXIF 保护策略：原图在限制内时跳过压缩直接上传，完整保留 GPS/拍摄时间等元数据；
  * 仅当原图超限时才压缩，并显式 preserveExif。
+ * 通过 type 区分主图（img）与备选图（img_alt）。
  */
 import { useState, useRef } from 'react';
 import imageCompression from 'browser-image-compression';
@@ -14,6 +15,8 @@ interface Props {
   hasExisting: boolean;
   onUploadComplete: () => void;
   onNeedConfirm: (callback: () => void) => void;
+  /** 素材类型：主图 img（默认）/ 备选图 img_alt */
+  type?: 'img' | 'img_alt';
 }
 
 const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
@@ -21,7 +24,16 @@ const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const COMPRESS_THRESHOLD = 20 * 1024 * 1024;
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
-export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplete, onNeedConfirm }: Props) {
+export default function ImageUploadPanel({
+  pointId,
+  hasExisting,
+  onUploadComplete,
+  onNeedConfirm,
+  type = 'img',
+}: Props) {
+  const isAlt = type === 'img_alt';
+  const inputId = isAlt ? 'image-input-alt' : 'image-input';
+
   const [file, setFile] = useState<File | null>(null);
   const [compressProgress, setCompressProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -89,12 +101,12 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
         setCompressProgress(100);
       }
 
-      // 分片上传
+      // 分片上传（type 区分主图/备选图）
       await uploadFile(
         uploadBlob,
         originalFile.name,
         pointId,
-        'img',
+        type,
         fileId,
         (progress) => setUploadProgress(progress)
       );
@@ -117,12 +129,18 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
   const isUploading = uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
   const isCompressing = compressProgress > 0 && compressProgress < 100;
 
+  const title = isAlt ? '备选图片上传' : '图片上传';
+  const accentColor = isAlt ? 'bg-status-yellow' : 'bg-accent';
+  const borderColor = isAlt ? 'hover:border-status-yellow' : 'hover:border-accent';
+  const hoverBg = isAlt ? 'hover:bg-base-600/30' : 'hover:bg-base-600/30';
+  const successText = isAlt ? '备选图片上传成功' : '图片上传成功';
+
   return (
     <div className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-mono text-sm text-base-100 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-accent"></span>
-          图片上传
+          <span className={`w-2 h-2 rounded-full ${accentColor}`}></span>
+          {title}
         </h3>
         {hasExisting && (
           <span className="text-xs text-status-yellow font-mono">已有图片，将覆盖</span>
@@ -140,16 +158,16 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
         onChange={handleFileSelect}
         disabled={disabled || isUploading || isCompressing}
         className="hidden"
-        id="image-input"
+        id={inputId}
       />
 
       <label
-        htmlFor={disabled || isUploading || isCompressing ? '' : 'image-input'}
+        htmlFor={disabled || isUploading || isCompressing ? '' : inputId}
         className={`
           block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
           ${disabled || isUploading || isCompressing
             ? 'border-base-600 cursor-not-allowed'
-            : 'border-base-500 hover:border-accent hover:bg-base-600/30'
+            : `border-base-500 ${borderColor} ${hoverBg}`
           }
         `}
       >
@@ -160,7 +178,7 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
           </div>
         ) : (
           <div className="text-base-300">
-            <p className="text-sm">点击选择图片</p>
+            <p className="text-sm">点击选择{isAlt ? '备选' : ''}图片</p>
             <p className="text-xs text-base-400 mt-1">JPG / PNG / WEBP</p>
           </div>
         )}
@@ -200,7 +218,7 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
 
       {success && (
         <div className="mt-4 p-3 bg-status-green/10 border border-status-green/30 rounded text-sm text-status-green">
-          图片上传成功
+          {successText}
         </div>
       )}
     </div>

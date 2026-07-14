@@ -15,7 +15,7 @@ import {
   setToken,
   clearToken,
 } from '@/lib/api';
-import type { PointStatus, PointDetail } from '@/types';
+import type { PointStatus, PointDetail, MaterialType } from '@/types';
 
 type FilterType = 'all' | 'img_only' | 'video_only' | 'completed';
 
@@ -23,7 +23,15 @@ const FILTERS: { value: FilterType; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'img_only', label: '仅传图' },
   { value: 'video_only', label: '仅传视频' },
-  { value: 'completed', label: '全部完成' },
+  { value: 'completed', label: '主图+主视频' },
+];
+
+/** 批量下载类型选项 */
+const BATCH_TYPES: { type: MaterialType; label: string; shortLabel: string }[] = [
+  { type: 'img', label: '主图片', shortLabel: '图片' },
+  { type: 'img_alt', label: '备选图片', shortLabel: '备图' },
+  { type: 'video', label: '主视频', shortLabel: '视频' },
+  { type: 'video_alt', label: '备选视频', shortLabel: '备视频' },
 ];
 
 export default function AdminPage() {
@@ -35,7 +43,7 @@ export default function AdminPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [clearConfirm, setClearConfirm] = useState<{ id: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [batchDownloading, setBatchDownloading] = useState<'img' | 'video' | null>(null);
+  const [batchDownloading, setBatchDownloading] = useState<MaterialType | null>(null);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
   const loadPoints = useCallback(async () => {
@@ -91,13 +99,18 @@ export default function AdminPage() {
   const handleClearAll = async (id: number) => {
     setError(null);
     try {
-      // 删除图片
+      // 清空4种素材
       const point = points.find(p => p.id === id);
-      if (point?.has_image) {
-        await adminDeleteMaterial(id, 'img');
-      }
-      if (point?.has_video) {
-        await adminDeleteMaterial(id, 'video');
+      if (!point) return;
+      const types: MaterialType[] = ['img', 'img_alt', 'video', 'video_alt'];
+      for (const t of types) {
+        const hasKey = t === 'img' ? 'has_image'
+          : t === 'img_alt' ? 'has_image_alt'
+          : t === 'video' ? 'has_video'
+          : 'has_video_alt';
+        if (point[hasKey]) {
+          await adminDeleteMaterial(id, t);
+        }
       }
       await loadPoints();
     } catch (err) {
@@ -105,11 +118,16 @@ export default function AdminPage() {
     }
   };
 
-  const handleBatchDownload = async (type: 'img' | 'video') => {
-    const label = type === 'img' ? '图片' : '视频';
-    const count = type === 'img' ? stats.hasImage : stats.hasVideo;
+  const handleBatchDownload = async (type: MaterialType) => {
+    const meta = BATCH_TYPES.find(b => b.type === type)!;
+    const hasKey = type === 'img' ? 'has_image'
+      : type === 'img_alt' ? 'has_image_alt'
+      : type === 'video' ? 'has_video'
+      : 'has_video_alt';
+    const count = points.filter(p => p[hasKey]).length;
+
     if (count === 0) {
-      setBatchMsg(`暂无已上传的${label}素材`);
+      setBatchMsg(`暂无已上传的${meta.label}素材`);
       setTimeout(() => setBatchMsg(null), 3000);
       return;
     }
@@ -119,10 +137,10 @@ export default function AdminPage() {
     setError(null);
     try {
       const result = await adminBatchDownload(type);
-      setBatchMsg(`${label}批量下载完成：${result.zipName}`);
+      setBatchMsg(`${meta.label}批量下载完成：${result.zipName}`);
       setTimeout(() => setBatchMsg(null), 5000);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : `${label}批量下载失败`;
+      const msg = err instanceof Error ? err.message : `${meta.label}批量下载失败`;
       setError(msg);
     } finally {
       setBatchDownloading(null);
@@ -136,8 +154,17 @@ export default function AdminPage() {
   const stats = {
     total: points.length,
     hasImage: points.filter(p => p.has_image).length,
+    hasImageAlt: points.filter(p => p.has_image_alt).length,
     hasVideo: points.filter(p => p.has_video).length,
+    hasVideoAlt: points.filter(p => p.has_video_alt).length,
     completed: points.filter(p => p.has_image && p.has_video).length,
+  };
+
+  const statsByType: Record<MaterialType, number> = {
+    img: stats.hasImage,
+    img_alt: stats.hasImageAlt,
+    video: stats.hasVideo,
+    video_alt: stats.hasVideoAlt,
   };
 
   return (
@@ -173,36 +200,39 @@ export default function AdminPage() {
 
       <main className="p-6 max-w-[1600px] mx-auto">
         {/* 统计概览 */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6">
           <StatCard label="总点位数" value={stats.total} color="text-base-100" />
-          <StatCard label="已传图片" value={stats.hasImage} color="text-accent" />
-          <StatCard label="已传视频" value={stats.hasVideo} color="text-accent" />
-          <StatCard label="全部完成" value={stats.completed} color="text-status-green" />
+          <StatCard label="主图片" value={stats.hasImage} color="text-accent" />
+          <StatCard label="备选图片" value={stats.hasImageAlt} color="text-status-yellow" />
+          <StatCard label="主视频" value={stats.hasVideo} color="text-accent" />
+          <StatCard label="备选视频" value={stats.hasVideoAlt} color="text-status-yellow" />
+          <StatCard label="主图+主视频" value={stats.completed} color="text-status-green" />
         </div>
 
         {/* 批量下载工具栏 */}
-        <div className="flex items-center gap-3 mb-4 p-3 bg-base-700 border border-base-600 rounded-lg">
+        <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-base-700 border border-base-600 rounded-lg">
           <span className="text-xs text-base-400 font-mono">批量下载:</span>
-          <button
-            onClick={() => handleBatchDownload('img')}
-            disabled={batchDownloading !== null || stats.hasImage === 0}
-            className="px-3 py-1.5 text-xs font-mono rounded bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-          >
-            {batchDownloading === 'img' && (
-              <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin"></span>
-            )}
-            {batchDownloading === 'img' ? '打包图片中...' : `批量下载图片 (${stats.hasImage})`}
-          </button>
-          <button
-            onClick={() => handleBatchDownload('video')}
-            disabled={batchDownloading !== null || stats.hasVideo === 0}
-            className="px-3 py-1.5 text-xs font-mono rounded bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-          >
-            {batchDownloading === 'video' && (
-              <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin"></span>
-            )}
-            {batchDownloading === 'video' ? '打包视频中...' : `批量下载视频 (${stats.hasVideo})`}
-          </button>
+          {BATCH_TYPES.map(bt => {
+            const count = statsByType[bt.type];
+            const isDownloading = batchDownloading === bt.type;
+            const isAlt = bt.type.endsWith('_alt');
+            const colorClass = isAlt
+              ? 'bg-status-yellow/20 border-status-yellow/40 text-status-yellow hover:bg-status-yellow/30'
+              : 'bg-accent/20 border-accent/40 text-accent hover:bg-accent/30';
+            return (
+              <button
+                key={bt.type}
+                onClick={() => handleBatchDownload(bt.type)}
+                disabled={batchDownloading !== null || count === 0}
+                className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 ${colorClass}`}
+              >
+                {isDownloading && (
+                  <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                )}
+                {isDownloading ? `打包${bt.shortLabel}中...` : `${bt.label} (${count})`}
+              </button>
+            );
+          })}
           {batchMsg && (
             <span className="text-xs text-status-green font-mono ml-auto">{batchMsg}</span>
           )}
@@ -238,7 +268,7 @@ export default function AdminPage() {
         </div>
 
         {/* 点位列表表格 */}
-        <div className="bg-base-700 border border-base-600 rounded-lg overflow-hidden">
+        <div className="bg-base-700 border border-base-600 rounded-lg overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-base-800 border-b border-base-600 text-xs font-mono text-base-400">
@@ -246,8 +276,14 @@ export default function AdminPage() {
                 <th className="text-left px-4 py-3">区县</th>
                 <th className="text-left px-4 py-3">岸段类型</th>
                 <th className="text-left px-4 py-3">经纬度</th>
-                <th className="text-center px-4 py-3">图片</th>
-                <th className="text-center px-4 py-3">视频</th>
+                <th className="text-center px-2 py-3">
+                  主图
+                  <div className="text-[10px] text-base-500 mt-0.5">备图</div>
+                </th>
+                <th className="text-center px-2 py-3">
+                  主视频
+                  <div className="text-[10px] text-base-500 mt-0.5">备视频</div>
+                </th>
                 <th className="text-left px-4 py-3">最后上传</th>
                 <th className="text-center px-4 py-3">操作</th>
               </tr>
@@ -266,50 +302,63 @@ export default function AdminPage() {
                   </td>
                 </tr>
               ) : (
-                points.map(p => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-base-600/50 hover:bg-base-600/30 transition-colors"
-                  >
-                    <td className="px-4 py-3 font-mono text-accent">#{p.id}</td>
-                    <td className="px-4 py-3 text-base-200">{p.district}</td>
-                    <td className="px-4 py-3 text-base-300">{p.shore_type}</td>
-                    <td className="px-4 py-3 text-base-400 font-mono text-xs">
-                      {p.lon.toFixed(4)}, {p.lat.toFixed(4)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={p.has_image ? 'text-status-green' : 'text-status-red'}>
-                        {p.has_image ? '✓' : '✗'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={p.has_video ? 'text-status-green' : 'text-status-red'}>
-                        {p.has_video ? '✓' : '✗'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-base-400 text-xs font-mono">
-                      {p.upload_time || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => openDetail(p.id)}
-                          className="px-2 py-1 text-xs text-accent hover:bg-accent/10 rounded transition-colors"
-                        >
-                          查看
-                        </button>
-                        {(p.has_image || p.has_video) && (
+                points.map(p => {
+                  const hasAny = p.has_image || p.has_image_alt || p.has_video || p.has_video_alt;
+                  return (
+                    <tr
+                      key={p.id}
+                      className="border-b border-base-600/50 hover:bg-base-600/30 transition-colors"
+                    >
+                      <td className="px-4 py-3 font-mono text-accent">#{p.id}</td>
+                      <td className="px-4 py-3 text-base-200">{p.district}</td>
+                      <td className="px-4 py-3 text-base-300">{p.shore_type}</td>
+                      <td className="px-4 py-3 text-base-400 font-mono text-xs">
+                        {p.lon.toFixed(4)}, {p.lat.toFixed(4)}
+                      </td>
+                      <td className="px-2 py-3 text-center">
+                        <div className="flex flex-col items-center gap-0.5 leading-none">
+                          <span className={p.has_image ? 'text-status-green' : 'text-status-red'}>
+                            {p.has_image ? '✓' : '✗'}
+                          </span>
+                          <span className={`text-[10px] ${p.has_image_alt ? 'text-status-green' : 'text-status-red'}`}>
+                            {p.has_image_alt ? '✓' : '✗'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 text-center">
+                        <div className="flex flex-col items-center gap-0.5 leading-none">
+                          <span className={p.has_video ? 'text-status-green' : 'text-status-red'}>
+                            {p.has_video ? '✓' : '✗'}
+                          </span>
+                          <span className={`text-[10px] ${p.has_video_alt ? 'text-status-green' : 'text-status-red'}`}>
+                            {p.has_video_alt ? '✓' : '✗'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-base-400 text-xs font-mono">
+                        {p.upload_time || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => setClearConfirm({ id: p.id })}
-                            className="px-2 py-1 text-xs text-status-red hover:bg-status-red/10 rounded transition-colors"
+                            onClick={() => openDetail(p.id)}
+                            className="px-2 py-1 text-xs text-accent hover:bg-accent/10 rounded transition-colors"
                           >
-                            清空
+                            查看
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          {hasAny && (
+                            <button
+                              onClick={() => setClearConfirm({ id: p.id })}
+                              className="px-2 py-1 text-xs text-status-red hover:bg-status-red/10 rounded transition-colors"
+                            >
+                              清空
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -341,7 +390,7 @@ export default function AdminPage() {
       {clearConfirm && (
         <ConfirmDialog
           title="确认清空素材"
-          message={`确定清空点位 #${clearConfirm.id} 的全部素材吗？此操作不可撤销。`}
+          message={`确定清空点位 #${clearConfirm.id} 的全部素材（主图/备图/主视频/备视频）吗？此操作不可撤销。`}
           confirmText="确认清空"
           onConfirm={() => {
             handleClearAll(clearConfirm.id);
@@ -356,7 +405,7 @@ export default function AdminPage() {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-base-700 border border-base-600 rounded-lg p-4">
+    <div className="bg-base-700 border border-base-600 rounded-lg p-3">
       <div className="text-xs text-base-400 font-mono mb-1">{label}</div>
       <div className={`font-mono text-2xl ${color}`}>{value}</div>
     </div>
