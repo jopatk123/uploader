@@ -10,6 +10,7 @@ import {
   adminFetchPoints,
   adminFetchPointDetail,
   adminDeleteMaterial,
+  adminBatchDownload,
   getToken,
   setToken,
   clearToken,
@@ -34,6 +35,8 @@ export default function AdminPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [clearConfirm, setClearConfirm] = useState<{ id: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [batchDownloading, setBatchDownloading] = useState<'img' | 'video' | null>(null);
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
   const loadPoints = useCallback(async () => {
     setLoading(true);
@@ -102,6 +105,30 @@ export default function AdminPage() {
     }
   };
 
+  const handleBatchDownload = async (type: 'img' | 'video') => {
+    const label = type === 'img' ? '图片' : '视频';
+    const count = type === 'img' ? stats.hasImage : stats.hasVideo;
+    if (count === 0) {
+      setBatchMsg(`暂无已上传的${label}素材`);
+      setTimeout(() => setBatchMsg(null), 3000);
+      return;
+    }
+
+    setBatchDownloading(type);
+    setBatchMsg(null);
+    setError(null);
+    try {
+      const result = await adminBatchDownload(type);
+      setBatchMsg(`${label}批量下载完成：${result.zipName}`);
+      setTimeout(() => setBatchMsg(null), 5000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : `${label}批量下载失败`;
+      setError(msg);
+    } finally {
+      setBatchDownloading(null);
+    }
+  };
+
   if (!authed) {
     return <LoginModal onLogin={handleLogin} />;
   }
@@ -151,6 +178,34 @@ export default function AdminPage() {
           <StatCard label="已传图片" value={stats.hasImage} color="text-accent" />
           <StatCard label="已传视频" value={stats.hasVideo} color="text-accent" />
           <StatCard label="全部完成" value={stats.completed} color="text-status-green" />
+        </div>
+
+        {/* 批量下载工具栏 */}
+        <div className="flex items-center gap-3 mb-4 p-3 bg-base-700 border border-base-600 rounded-lg">
+          <span className="text-xs text-base-400 font-mono">批量下载:</span>
+          <button
+            onClick={() => handleBatchDownload('img')}
+            disabled={batchDownloading !== null || stats.hasImage === 0}
+            className="px-3 py-1.5 text-xs font-mono rounded bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {batchDownloading === 'img' && (
+              <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin"></span>
+            )}
+            {batchDownloading === 'img' ? '打包图片中...' : `批量下载图片 (${stats.hasImage})`}
+          </button>
+          <button
+            onClick={() => handleBatchDownload('video')}
+            disabled={batchDownloading !== null || stats.hasVideo === 0}
+            className="px-3 py-1.5 text-xs font-mono rounded bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            {batchDownloading === 'video' && (
+              <span className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin"></span>
+            )}
+            {batchDownloading === 'video' ? '打包视频中...' : `批量下载视频 (${stats.hasVideo})`}
+          </button>
+          {batchMsg && (
+            <span className="text-xs text-status-green font-mono ml-auto">{batchMsg}</span>
+          )}
         </div>
 
         {error && (

@@ -139,3 +139,31 @@ function triggerDownload(blob: Blob, filename: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * 管理员批量下载（zip 打包所有点位的图片或视频）
+ * 由于 zip 流式生成无 Content-Length，用 blob 方式下载后触发保存
+ */
+export async function adminBatchDownload(
+  type: 'img' | 'video',
+): Promise<{ count: number; zipName: string }> {
+  const res = await fetch(`/api/admin/batch-download?type=${type}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '批量下载失败' }));
+    throw new Error(err.error || '批量下载失败');
+  }
+
+  // 从 Content-Disposition 提取文件名
+  const cd = res.headers.get('Content-Disposition') || '';
+  const match = cd.match(/filename="([^"]+)"/);
+  const zipName = match ? match[1] : `${type}_batch.zip`;
+
+  const blob = await res.blob();
+  triggerDownload(blob, zipName);
+
+  // 从 zip 中无法预知文件数，返回 0 表示成功
+  return { count: 0, zipName };
+}

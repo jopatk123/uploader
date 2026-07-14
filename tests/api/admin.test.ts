@@ -242,3 +242,45 @@ describe('管理员下载接口', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('管理员批量下载接口', () => {
+  beforeAll(async () => {
+    const res = await request(app)
+      .post('/api/admin/login')
+      .send({ password: ADMIN_PASSWORD });
+    token = res.body.data.token;
+  });
+
+  it('无效 type 返回 400', async () => {
+    const res = await request(app)
+      .get('/api/admin/batch-download?type=invalid')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('type');
+  });
+
+  it('缺少 type 返回 400', async () => {
+    const res = await request(app)
+      .get('/api/admin/batch-download')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('无素材时返回 404', async () => {
+    const res = await request(app)
+      .get('/api/admin/batch-download?type=img')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('可下载');
+  });
+
+  it('无 Token 返回 403', async () => {
+    const res = await request(app).get('/api/admin/batch-download?type=img');
+    expect(res.status).toBe(403);
+  });
+});

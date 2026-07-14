@@ -1,6 +1,8 @@
 /**
  * 图片上传面板
- * 支持 jpg/png/webp，单张上限20MB，前端画质压缩，分片上传，进度展示
+ * 支持 jpg/png/webp，单张上限20MB
+ * EXIF 保护策略：原图在限制内时跳过压缩直接上传，完整保留 GPS/拍摄时间等元数据；
+ * 仅当原图超限时才压缩，并显式 preserveExif。
  */
 import { useState, useRef } from 'react';
 import imageCompression from 'browser-image-compression';
@@ -15,6 +17,8 @@ interface Props {
 }
 
 const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
+// 超过该阈值才触发画质压缩（避免 Canvas 重绘丢失 EXIF）
+const COMPRESS_THRESHOLD = 20 * 1024 * 1024;
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplete, onNeedConfirm }: Props) {
@@ -65,21 +69,29 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
       setSuccess(false);
       setError(null);
 
-      // 前端画质压缩
-      setCompressProgress(0);
-      const compressed = await imageCompression(originalFile, {
-        maxSizeMB: 20,
-        maxWidthOrHeight: undefined, // 不限制分辨率
-        useWebWorker: true,
-        onProgress: (p) => setCompressProgress(p),
-      });
+      // EXIF 保护：原图在限制内时直接上传，跳过 Canvas 重绘，完整保留元数据
+      let uploadBlob: Blob = originalFile;
+      const fileId = generateFileId(originalFile);
 
-      setCompressProgress(100);
+      if (originalFile.size > COMPRESS_THRESHOLD) {
+        // 大图才压缩，并显式保留 EXIF
+        setCompressProgress(0);
+        uploadBlob = await imageCompression(originalFile, {
+          maxSizeMB: 20,
+          maxWidthOrHeight: undefined,
+          useWebWorker: true,
+          preserveExif: true,
+          onProgress: (p) => setCompressProgress(p),
+        });
+        setCompressProgress(100);
+      } else {
+        // 跳过压缩，直接用原图（完整保留 EXIF）
+        setCompressProgress(100);
+      }
 
       // 分片上传
-      const fileId = generateFileId(originalFile);
       await uploadFile(
-        compressed,
+        uploadBlob,
         originalFile.name,
         pointId,
         'img',
@@ -118,7 +130,7 @@ export default function ImageUploadPanel({ pointId, hasExisting, onUploadComplet
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: JPG / PNG / WEBP · 上限: 20MB · 自动画质压缩
+        格式: JPG / PNG / WEBP · 上限: 20MB · 完整保留 EXIF
       </div>
 
       <input

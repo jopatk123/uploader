@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
 import { db, STORAGE_DIR } from '../db.js';
 import { authMiddleware, generateToken, verifyPassword } from '../middleware/auth.js';
 
@@ -220,6 +221,94 @@ router.delete('/material/:id', (req, res) => {
   `).run(pointId);
 
   res.json({ success: true, message: '素材已删除' });
+});
+
+/**
+ * GET /api/admin/batch-download?type=img|video
+ * 批量下载所有点位的图片或视频素材（zip 流式打包）
+ * 文件名规则：point_{id}_{city}_{district}.{ext}
+ */
+router.get('/batch-download', (req, res) => {
+  const type = req.query.type as string;
+  if (type !== 'img' && type !== 'video') {
+    res.status(400).json({ success: false, error: 'type 参数无效，仅支持 img 或 video' });
+    return;
+  }
+
+  // 查询所有已上传该类型素材的点位
+  const column = type === 'img' ? 'img_path' : 'video_path';
+  const rows = db.prepare(`
+    SELECT p.id, p.city, p.district, m.${column} AS rel_path
+    FROM point_info p
+    INNER JOIN point_material m ON p.id = m.point_id
+    WHERE m.${column} IS NOT NULL
+    ORDER BY p.id
+  `).all() as Array<{ id: number; city: string; district: string; rel_path: string }>;
+
+  if (rows.length === 0) {
+    res.status(404).json({ success: false, error: '没有可下载的素材' });
+    return;
+  }
+
+  // 生成 zip 文件名
+  const now = new Date();
+  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  const zipName = type === 'img' ? `images_${ts}.zip` : `videos_${ts}.zip`;
+  const typeLabel = type === 'img' ? '图片' : '视频';
+
+  // 设置响应头
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+
+  // 创建 archiver 实例（zip 格式，存储模式不压缩视频/已压缩图片）
+  const archive = archiver('zip', {
+    store: type === 'video', // 视频已是压缩格式，仅存储不重复压缩
+  });
+
+  // 错误处理
+  archive.on('error', (err: Error) => {
+    console.error('[batch-download] archiver error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: '打包失败' });
+    } else {
+      res.end();
+    }
+  });
+
+  // 流式 pipe 到响应
+  archive.pipe(res);
+
+  // 逐个添加文件，跳过磁盘上不存在的
+  let addedCount = 0;
+  let skippedCount = 0;
+  for (const row of rows) {
+    const fullPath = path.join(STORAGE_DIR, row.rel_path);
+    if (!fs.existsSync(fullPath)) {
+      skippedCount++;
+      continue;
+    }
+    // 文件名：point_{id}_{city}_{district}_{shore_type}.{ext}
+    const ext = path.extname(row.rel_path);
+    const safeCity = row.city.replace(/[/\\:*?"<>|]/g, '_');
+    const safeDistrict = row.district.replace(/[/\\:*?"<>|]/g, '_');
+    const entryName = `point_${row.id}_${safeCity}_${safeDistrict}${ext}`;
+    archive.file(fullPath, { name: entryName });
+    addedCount++;
+  }
+
+  console.log(`[batch-download] ${typeLabel}打包: ${addedCount} 个文件, 跳过 ${skippedCount} 个缺失文件`);
+
+  if (addedCount === 0) {
+    // 所有文件都不存在，中断流
+    archive.abort();
+    if (!res.headersSent) {
+      res.status(404).json({ success: false, error: '文件均不存在，无法下载' });
+    }
+    return;
+  }
+
+  // 完成打包
+  archive.finalize();
 });
 
 export default router;
