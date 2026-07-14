@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile --config.minimumReleaseAge=0 --config.dangero
 
 # 复制源码并构建前端
 COPY . .
-RUN pnpm build
+RUN pnpm run build --config.verifyDepsBeforeRun=false
 
 # ============ 运行阶段 ============
 FROM node:22-slim
