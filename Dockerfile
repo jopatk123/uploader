@@ -32,12 +32,8 @@ COPY --from=builder /app/dist ./dist
 COPY api ./api
 COPY tsconfig.json ./
 
-# 创建数据目录并授权给非 root 用户
-RUN mkdir -p /app/data/storage /app/data/temp_chunk && \
-    useradd -r -u 1001 -g root -m -d /app/home uploader && \
-    chown -R uploader:root /app
-ENV HOME=/app/home
-USER uploader
+# 创建数据目录
+RUN mkdir -p /app/data/storage /app/data/temp_chunk
 
 EXPOSE 3001
 
@@ -45,5 +41,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# 启动命令（直接调用 tsx，避免 npx 触发 HOME 目录写入）
+# 启动命令
 CMD ["./node_modules/.bin/tsx", "api/server.ts"]
