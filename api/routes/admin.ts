@@ -68,7 +68,9 @@ router.get('/points', (req, res) => {
     whereClause = 'WHERE m.img_path IS NOT NULL AND m.video_path IS NOT NULL';
   }
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
       m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
@@ -76,7 +78,9 @@ router.get('/points', (req, res) => {
     LEFT JOIN point_material m ON p.id = m.point_id
     ${whereClause}
     ORDER BY p.id
-  `).all() as Array<{
+  `,
+    )
+    .all() as Array<{
     id: number;
     city: string;
     district: string;
@@ -90,7 +94,7 @@ router.get('/points', (req, res) => {
     upload_time: string | null;
   }>;
 
-  const points = rows.map(r => ({
+  const points = rows.map((r) => ({
     id: r.id,
     city: r.city,
     district: r.district,
@@ -122,26 +126,32 @@ router.get('/point/:id', (req, res) => {
     return;
   }
 
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
       m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
     FROM point_info p
     LEFT JOIN point_material m ON p.id = m.point_id
     WHERE p.id = ?
-  `).get(pointId) as {
-    id: number;
-    city: string;
-    district: string;
-    lon: number;
-    lat: number;
-    shore_type: string;
-    img_path: string | null;
-    img_path_alt: string | null;
-    video_path: string | null;
-    video_path_alt: string | null;
-    upload_time: string | null;
-  } | undefined;
+  `,
+    )
+    .get(pointId) as
+    | {
+        id: number;
+        city: string;
+        district: string;
+        lon: number;
+        lat: number;
+        shore_type: string;
+        img_path: string | null;
+        img_path_alt: string | null;
+        video_path: string | null;
+        video_path_alt: string | null;
+        upload_time: string | null;
+      }
+    | undefined;
 
   if (!row) {
     res.status(404).json({ success: false, error: '点位不存在' });
@@ -174,9 +184,9 @@ router.get('/download/:id', (req, res) => {
     return;
   }
 
-  const row = db.prepare(
-    `SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`
-  ).get(pointId) as { rel_path: string | null } | undefined;
+  const row = db
+    .prepare(`SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`)
+    .get(pointId) as { rel_path: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ success: false, error: '点位不存在' });
@@ -222,9 +232,9 @@ router.delete('/material/:id', (req, res) => {
     return;
   }
 
-  const row = db.prepare(
-    `SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`
-  ).get(pointId) as { rel_path: string | null } | undefined;
+  const row = db
+    .prepare(`SELECT ${column} AS rel_path FROM point_material WHERE point_id = ?`)
+    .get(pointId) as { rel_path: string | null } | undefined;
 
   if (!row) {
     res.status(404).json({ success: false, error: '点位不存在' });
@@ -243,9 +253,11 @@ router.delete('/material/:id', (req, res) => {
   }
 
   // 更新数据库
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE point_material SET ${column} = NULL WHERE point_id = ?
-  `).run(pointId);
+  `,
+  ).run(pointId);
 
   res.json({ success: true, message: '素材已删除' });
 });
@@ -254,23 +266,35 @@ router.delete('/material/:id', (req, res) => {
  * GET /api/admin/batch-download?type=img|img_alt|video|video_alt
  * 批量下载所有点位的某类型素材（zip 流式打包）
  * 文件名规则：point_{id}_{city}_{district}_{type}.{ext}
+ *
+ * 容错策略：
+ *   - 磁盘上不存在的文件自动跳过，记录警告
+ *   - 单个文件添加失败不影响其他文件
+ *   - 客户端断开自动中止打包，释放资源
+ *   - 全部文件不存在时返回 404
  */
 router.get('/batch-download', (req, res) => {
   const type = req.query.type as string;
   const column = validateType(type);
   if (!column) {
-    res.status(400).json({ success: false, error: 'type 参数无效，仅支持 img / img_alt / video / video_alt' });
+    res
+      .status(400)
+      .json({ success: false, error: 'type 参数无效，仅支持 img / img_alt / video / video_alt' });
     return;
   }
 
   // 查询所有已上传该类型素材的点位
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT p.id, p.city, p.district, m.${column} AS rel_path
     FROM point_info p
     INNER JOIN point_material m ON p.id = m.point_id
     WHERE m.${column} IS NOT NULL
     ORDER BY p.id
-  `).all() as Array<{ id: number; city: string; district: string; rel_path: string }>;
+  `,
+    )
+    .all() as Array<{ id: number; city: string; district: string; rel_path: string }>;
 
   if (rows.length === 0) {
     res.status(404).json({ success: false, error: '没有可下载的素材' });
@@ -287,52 +311,95 @@ router.get('/batch-download', (req, res) => {
     video_alt: 'videos_alt',
   };
   const zipName = `${typeLabelMap[type]}_${ts}.zip`;
-  const isVideo = type === 'video' || type === 'video_alt';
 
   // 设置响应头
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
+  // 告知浏览器保持连接，支持大文件长时间传输
+  res.setHeader('X-Content-Type-Options', 'nosniff');
 
-  // 创建 archiver 实例（zip 格式，存储模式不压缩视频/已压缩图片）
-  const archive = archiver('zip', {
-    store: isVideo, // 视频已是压缩格式，仅存储不重复压缩
-  });
+  // 所有素材已是压缩格式（JPEG/PNG/WebP/MP4），统一用 store 模式避免重复压缩
+  const archive = archiver('zip', { store: true });
 
-  // 错误处理
-  archive.on('error', (err: Error) => {
-    console.error('[batch-download] archiver error:', err.message);
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, error: '打包失败' });
-    } else {
+  // ── 背压控制：客户端断开时中止打包 ──
+  let clientDisconnected = false;
+  const onClientClose = () => {
+    if (!res.writableEnded) {
+      clientDisconnected = true;
+      archive.abort();
+      console.log(`[batch-download] 客户端断开，已终止 ${type} 打包`);
+    }
+  };
+  req.on('close', onClientClose);
+
+  // ── 超时控制：30 分钟无响应则终止（防止僵尸连接） ──
+  req.setTimeout(30 * 60 * 1000, () => {
+    console.warn(`[batch-download] ${type} 打包超时，强制终止`);
+    if (!res.writableEnded) {
+      clientDisconnected = true;
+      archive.abort();
       res.end();
     }
+  });
+
+  // ── archiver 错误处理 ──
+  archive.on('error', (err: Error) => {
+    if (clientDisconnected) return;
+    console.error('[batch-download] archiver 致命错误:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: '打包失败' });
+    }
+  });
+
+  // ── 完成日志 ──
+  archive.on('finish', () => {
+    console.log(`[batch-download] ${type} 打包完成`);
   });
 
   // 流式 pipe 到响应
   archive.pipe(res);
 
-  // 逐个添加文件，跳过磁盘上不存在的
+  // ── 逐个添加文件，逐文件容错 ──
   let addedCount = 0;
   let skippedCount = 0;
+
   for (const row of rows) {
+    if (clientDisconnected) break;
+
     const fullPath = path.join(STORAGE_DIR, row.rel_path);
+
+    // 磁盘文件不存在 → 跳过并记录警告
     if (!fs.existsSync(fullPath)) {
+      console.warn(`[batch-download] 跳过缺失文件: ${row.rel_path}`);
       skippedCount++;
       continue;
     }
-    // 文件名：point_{id}_{city}_{district}_{type}.{ext}
+
+    // 安全文件名
     const ext = path.extname(row.rel_path);
     const safeCity = row.city.replace(/[/\\:*?"<>|]/g, '_');
     const safeDistrict = row.district.replace(/[/\\:*?"<>|]/g, '_');
     const entryName = `point_${row.id}_${safeCity}_${safeDistrict}_${type}${ext}`;
-    archive.file(fullPath, { name: entryName });
-    addedCount++;
+
+    try {
+      archive.file(fullPath, { name: entryName });
+      addedCount++;
+    } catch (err) {
+      // 单文件添加失败不影响整体
+      console.error(`[batch-download] 添加失败 ${entryName}:`, (err as Error).message);
+      skippedCount++;
+    }
   }
 
-  console.log(`[batch-download] ${type}打包: ${addedCount} 个文件, 跳过 ${skippedCount} 个缺失文件`);
+  // 打印统计摘要
+  console.log(
+    `[batch-download] ${type} 统计: 成功 ${addedCount} 个, 跳过 ${skippedCount} 个 (共 ${rows.length} 条记录)`,
+  );
 
+  // ── 如果所有文件都无效 ──
   if (addedCount === 0) {
-    // 所有文件都不存在，中断流
+    // 清理监听器
+    req.off('close', onClientClose);
     archive.abort();
     if (!res.headersSent) {
       res.status(404).json({ success: false, error: '文件均不存在，无法下载' });
@@ -340,7 +407,7 @@ router.get('/batch-download', (req, res) => {
     return;
   }
 
-  // 完成打包
+  // ── 完成打包，开始传输 ──
   archive.finalize();
 });
 

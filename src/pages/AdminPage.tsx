@@ -100,14 +100,18 @@ export default function AdminPage() {
     setError(null);
     try {
       // 清空4种素材
-      const point = points.find(p => p.id === id);
+      const point = points.find((p) => p.id === id);
       if (!point) return;
       const types: MaterialType[] = ['img', 'img_alt', 'video', 'video_alt'];
       for (const t of types) {
-        const hasKey = t === 'img' ? 'has_image'
-          : t === 'img_alt' ? 'has_image_alt'
-          : t === 'video' ? 'has_video'
-          : 'has_video_alt';
+        const hasKey =
+          t === 'img'
+            ? 'has_image'
+            : t === 'img_alt'
+              ? 'has_image_alt'
+              : t === 'video'
+                ? 'has_video'
+                : 'has_video_alt';
         if (point[hasKey]) {
           await adminDeleteMaterial(id, t);
         }
@@ -119,12 +123,16 @@ export default function AdminPage() {
   };
 
   const handleBatchDownload = async (type: MaterialType) => {
-    const meta = BATCH_TYPES.find(b => b.type === type)!;
-    const hasKey = type === 'img' ? 'has_image'
-      : type === 'img_alt' ? 'has_image_alt'
-      : type === 'video' ? 'has_video'
-      : 'has_video_alt';
-    const count = points.filter(p => p[hasKey]).length;
+    const meta = BATCH_TYPES.find((b) => b.type === type)!;
+    const hasKey =
+      type === 'img'
+        ? 'has_image'
+        : type === 'img_alt'
+          ? 'has_image_alt'
+          : type === 'video'
+            ? 'has_video'
+            : 'has_video_alt';
+    const count = points.filter((p) => p[hasKey]).length;
 
     if (count === 0) {
       setBatchMsg(`暂无已上传的${meta.label}素材`);
@@ -136,8 +144,9 @@ export default function AdminPage() {
     setBatchMsg(null);
     setError(null);
     try {
-      const result = await adminBatchDownload(type);
-      setBatchMsg(`${meta.label}批量下载完成：${result.zipName}`);
+      await adminBatchDownload(type);
+      // 浏览器原生下载已触发，文件将出现在浏览器下载栏中
+      setBatchMsg(`${meta.label}共 ${count} 个文件，下载已开始`);
       setTimeout(() => setBatchMsg(null), 5000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : `${meta.label}批量下载失败`;
@@ -153,11 +162,11 @@ export default function AdminPage() {
 
   const stats = {
     total: points.length,
-    hasImage: points.filter(p => p.has_image).length,
-    hasImageAlt: points.filter(p => p.has_image_alt).length,
-    hasVideo: points.filter(p => p.has_video).length,
-    hasVideoAlt: points.filter(p => p.has_video_alt).length,
-    completed: points.filter(p => p.has_image && p.has_video).length,
+    hasImage: points.filter((p) => p.has_image).length,
+    hasImageAlt: points.filter((p) => p.has_image_alt).length,
+    hasVideo: points.filter((p) => p.has_video).length,
+    hasVideoAlt: points.filter((p) => p.has_video_alt).length,
+    completed: points.filter((p) => p.has_image && p.has_video).length,
   };
 
   const statsByType: Record<MaterialType, number> = {
@@ -212,7 +221,7 @@ export default function AdminPage() {
         {/* 批量下载工具栏 */}
         <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-base-700 border border-base-600 rounded-lg">
           <span className="text-xs text-base-400 font-mono">批量下载:</span>
-          {BATCH_TYPES.map(bt => {
+          {BATCH_TYPES.map((bt) => {
             const count = statsByType[bt.type];
             const isDownloading = batchDownloading === bt.type;
             const isAlt = bt.type.endsWith('_alt');
@@ -247,15 +256,16 @@ export default function AdminPage() {
         {/* 筛选栏 */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-xs text-base-400 font-mono mr-2">筛选:</span>
-          {FILTERS.map(f => (
+          {FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
               className={`
                 px-3 py-1.5 text-xs font-mono rounded transition-colors
-                ${filter === f.value
-                  ? 'bg-accent text-base-900 font-medium'
-                  : 'bg-base-700 text-base-300 border border-base-600 hover:bg-base-600'
+                ${
+                  filter === f.value
+                    ? 'bg-accent text-base-900 font-medium'
+                    : 'bg-base-700 text-base-300 border border-base-600 hover:bg-base-600'
                 }
               `}
             >
@@ -302,7 +312,7 @@ export default function AdminPage() {
                   </td>
                 </tr>
               ) : (
-                points.map(p => {
+                points.map((p) => {
                   const hasAny = p.has_image || p.has_image_alt || p.has_video || p.has_video_alt;
                   return (
                     <tr
@@ -320,7 +330,9 @@ export default function AdminPage() {
                           <span className={p.has_image ? 'text-status-green' : 'text-status-red'}>
                             {p.has_image ? '✓' : '✗'}
                           </span>
-                          <span className={`text-[10px] ${p.has_image_alt ? 'text-status-green' : 'text-status-red'}`}>
+                          <span
+                            className={`text-[10px] ${p.has_image_alt ? 'text-status-green' : 'text-status-red'}`}
+                          >
                             {p.has_image_alt ? '✓' : '✗'}
                           </span>
                         </div>
@@ -330,7 +342,9 @@ export default function AdminPage() {
                           <span className={p.has_video ? 'text-status-green' : 'text-status-red'}>
                             {p.has_video ? '✓' : '✗'}
                           </span>
-                          <span className={`text-[10px] ${p.has_video_alt ? 'text-status-green' : 'text-status-red'}`}>
+                          <span
+                            className={`text-[10px] ${p.has_video_alt ? 'text-status-green' : 'text-status-red'}`}
+                          >
                             {p.has_video_alt ? '✓' : '✗'}
                           </span>
                         </div>

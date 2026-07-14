@@ -22,16 +22,31 @@ export function verifyPassword(password: string): boolean {
 }
 
 /**
- * 鉴权中间件：校验 Authorization Header 中的 Token
+ * 从请求中提取 Token（支持 Header 与 Query 两种方式）
+ * Query 方式用于批量下载等需要浏览器原生流式下载的场景
+ */
+function extractToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  const queryToken = req.query?.token;
+  if (typeof queryToken === 'string' && queryToken.length > 0) {
+    return queryToken;
+  }
+  return null;
+}
+
+/**
+ * 鉴权中间件：校验 Authorization Header 或 Query 参数中的 Token
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const token = extractToken(req);
+  if (!token) {
     res.status(403).json({ success: false, error: '未提供认证Token，禁止访问' });
     return;
   }
 
-  const token = authHeader.substring(7);
   try {
     jwt.verify(token, JWT_SECRET);
     next();

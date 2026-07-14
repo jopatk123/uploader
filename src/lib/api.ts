@@ -84,7 +84,7 @@ export async function adminDownload(
   id: number,
   type: MaterialType,
   ext: string,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number) => void,
 ): Promise<void> {
   const res = await fetch(`/api/admin/download/${id}?type=${type}`, {
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -142,28 +142,22 @@ function triggerDownload(blob: Blob, filename: string): void {
 
 /**
  * 管理员批量下载（zip 打包所有点位的某类型素材）
- * 由于 zip 流式生成无 Content-Length，用 blob 方式下载后触发保存
+ *
+ * 使用浏览器原生流式下载（不经过内存缓冲），由服务端 archiver 流式生成 zip、
+ * 浏览器自动保存到磁盘。适用于大文件场景（100MB+ 到数GB）。
  */
-export async function adminBatchDownload(
-  type: MaterialType,
-): Promise<{ count: number; zipName: string }> {
-  const res = await fetch(`/api/admin/batch-download?type=${type}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
+export async function adminBatchDownload(type: MaterialType): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('未登录');
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: '批量下载失败' }));
-    throw new Error(err.error || '批量下载失败');
-  }
+  // Token 通过 query 参数传递，使浏览器可以直接发起下载请求
+  const url = `/api/admin/batch-download?type=${type}&token=${encodeURIComponent(token)}`;
 
-  // 从 Content-Disposition 提取文件名
-  const cd = res.headers.get('Content-Disposition') || '';
-  const match = cd.match(/filename="([^"]+)"/);
-  const zipName = match ? match[1] : `${type}_batch.zip`;
-
-  const blob = await res.blob();
-  triggerDownload(blob, zipName);
-
-  // 从 zip 中无法预知文件数，返回 0 表示成功
-  return { count: 0, zipName };
+  // 触发浏览器原生下载 —— 浏览器会流式接收数据、直接写盘、显示原生下载进度
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = ''; // 文件名由服务端 Content-Disposition 响应头决定
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
