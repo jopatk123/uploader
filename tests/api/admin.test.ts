@@ -251,36 +251,50 @@ describe('管理员批量下载接口', () => {
     token = res.body.data.token;
   });
 
-  it('无效 type 返回 400', async () => {
+  /** 辅助：获取一次性下载票据 */
+  async function getTicket(): Promise<string> {
     const res = await request(app)
-      .get('/api/admin/batch-download?type=invalid')
+      .post('/api/admin/download-ticket')
       .set('Authorization', `Bearer ${token}`);
+    return res.body.data.ticket;
+  }
+
+  it('无票据返回 403', async () => {
+    const res = await request(app)
+      .get('/api/admin/batch-download?type=img')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('无效票据返回 403', async () => {
+    const res = await request(app).get('/api/admin/batch-download?type=img&ticket=invalid');
+    expect(res.status).toBe(403);
+  });
+
+  it('有效票据但无效 type 返回 400', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/batch-download?type=invalid&ticket=${ticket}`);
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toContain('type');
   });
 
-  it('缺少 type 返回 400', async () => {
-    const res = await request(app)
-      .get('/api/admin/batch-download')
-      .set('Authorization', `Bearer ${token}`);
-
-    expect(res.status).toBe(400);
-  });
-
-  it('无素材时返回 404', async () => {
-    const res = await request(app)
-      .get('/api/admin/batch-download?type=img')
-      .set('Authorization', `Bearer ${token}`);
+  it('有效票据但无素材时返回 404', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/batch-download?type=img&ticket=${ticket}`);
 
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toContain('可下载');
   });
 
-  it('无 Token 返回 403', async () => {
-    const res = await request(app).get('/api/admin/batch-download?type=img');
+  it('票据仅可用一次（重放返回 403）', async () => {
+    const ticket = await getTicket();
+    // 第一次使用（会因无素材返回 404，但票据已被消费）
+    await request(app).get(`/api/admin/batch-download?type=img&ticket=${ticket}`);
+    // 第二次使用同一票据 → 403
+    const res = await request(app).get(`/api/admin/batch-download?type=img&ticket=${ticket}`);
     expect(res.status).toBe(403);
   });
 });

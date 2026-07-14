@@ -29,7 +29,7 @@ describe('上传流程 - 分片接口', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
-    expect(res.body.error).toContain('缺少');
+    expect(res.body.error).toContain('参数非法');
   });
 
   it('未上传分片文件返回 400', async () => {
@@ -136,7 +136,7 @@ describe('上传流程 - 合并接口', () => {
     // 合并
     const mergeRes = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId: '3', type: 'img', fileName: 'pic.jpg' });
+      .send({ fileId, pointId: '3', type: 'img', fileName: 'pic.jpg', totalChunks: '1' });
 
     expect(mergeRes.status).toBe(200);
     expect(mergeRes.body.success).toBe(true);
@@ -158,7 +158,7 @@ describe('上传流程 - 合并接口', () => {
   it('非法 type 返回 400', async () => {
     const res = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: 'fid', pointId: '1', type: 'invalid', fileName: 'a.jpg' });
+      .send({ fileId: 'fid', pointId: '1', type: 'invalid', fileName: 'a.jpg', totalChunks: '1' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('类型');
@@ -167,7 +167,7 @@ describe('上传流程 - 合并接口', () => {
   it('不允许的文件后缀返回 400', async () => {
     const res = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: 'fid', pointId: '1', type: 'img', fileName: 'evil.exe' });
+      .send({ fileId: 'fid', pointId: '1', type: 'img', fileName: 'evil.exe', totalChunks: '1' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('后缀');
@@ -176,10 +176,43 @@ describe('上传流程 - 合并接口', () => {
   it('视频类型只允许 .mp4', async () => {
     const res = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: 'fid', pointId: '1', type: 'video', fileName: 'v.avi' });
+      .send({ fileId: 'fid', pointId: '1', type: 'video', fileName: 'v.avi', totalChunks: '1' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain('后缀');
+  });
+
+  it('缺少 totalChunks 返回 400', async () => {
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId: 'fid', pointId: '1', type: 'img', fileName: 'a.jpg' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('totalChunks');
+  });
+
+  it('totalChunks 与实际分片数不匹配返回 400', async () => {
+    const fileId = `fid-mismatch-${Date.now()}`;
+    const buf = makeFakeImageBuffer(512);
+
+    // 只上传1个分片
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', '1')
+      .field('type', 'img')
+      .field('fileName', 'a.jpg')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    // 声明 totalChunks=3 但实际只有1个分片
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId: '1', type: 'img', fileName: 'a.jpg', totalChunks: '3' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('分片不完整');
   });
 
   it('分片目录不存在返回 400', async () => {
@@ -190,6 +223,7 @@ describe('上传流程 - 合并接口', () => {
         pointId: '1',
         type: 'img',
         fileName: 'a.jpg',
+        totalChunks: '1',
       });
 
     expect(res.status).toBe(400);
@@ -222,7 +256,7 @@ describe('上传流程 - 合并接口', () => {
 
     const merge1 = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: fileId1, pointId, type: 'img', fileName: 'a.jpg' });
+      .send({ fileId: fileId1, pointId, type: 'img', fileName: 'a.jpg', totalChunks: '1' });
     const firstPath = merge1.body.data.path;
 
     // 第二次上传（覆盖）
@@ -239,7 +273,7 @@ describe('上传流程 - 合并接口', () => {
 
     const merge2 = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: fileId2, pointId, type: 'img', fileName: 'b.jpg' });
+      .send({ fileId: fileId2, pointId, type: 'img', fileName: 'b.jpg', totalChunks: '1' });
 
     expect(merge2.body.success).toBe(true);
     expect(merge2.body.data.path).not.toBe(firstPath);
@@ -271,7 +305,7 @@ describe('上传流程 - 合并接口', () => {
 
     await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId, type: 'img', fileName: 'dl.jpg' });
+      .send({ fileId, pointId, type: 'img', fileName: 'dl.jpg', totalChunks: '1' });
 
     const dlRes = await request(app)
       .get('/api/admin/download/5?type=img')
@@ -299,7 +333,7 @@ describe('上传流程 - 合并接口', () => {
 
     await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId, type: 'img', fileName: 'del.jpg' });
+      .send({ fileId, pointId, type: 'img', fileName: 'del.jpg', totalChunks: '1' });
 
     // 删除
     const delRes = await request(app)
@@ -316,6 +350,8 @@ describe('上传流程 - 合并接口', () => {
 
     expect(detailRes.body.data.has_image).toBe(false);
     expect(detailRes.body.data.img_path).toBeNull();
+    // 删除最后一个素材后 upload_time 应被清空
+    expect(detailRes.body.data.upload_time).toBeNull();
   });
 });
 
@@ -350,7 +386,7 @@ describe('上传流程 - 多分片视频合并', () => {
     // 合并
     const mergeRes = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId, type: 'video', fileName: 'multi.mp4' });
+      .send({ fileId, pointId, type: 'video', fileName: 'multi.mp4', totalChunks: '3' });
 
     expect(mergeRes.status).toBe(200);
     expect(mergeRes.body.data.size).toBe(totalSize);

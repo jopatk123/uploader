@@ -24,6 +24,7 @@ import {
 import pointsRoutes from './routes/points.js';
 import uploadRoutes from './routes/upload.js';
 import adminRoutes from './routes/admin.js';
+import { authMiddleware } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -93,10 +94,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 /**
- * 静态文件服务：图片缩略图预览（管理员可访问，不消耗带宽则不公开视频）
+ * 静态文件服务：图片缩略图预览（需管理员鉴权）
  * /storage/point_xx/img_xxx.jpg
+ * 前端通过 fetch + Authorization Header 获取图片并转为 blob URL 预览
  */
-app.use('/storage', express.static(STORAGE_DIR));
+app.use('/storage', authMiddleware, express.static(STORAGE_DIR));
 
 /**
  * 前端静态文件服务（生产环境，Vite build 后的 dist 目录）

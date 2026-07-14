@@ -73,12 +73,13 @@ async function completeUpload(
   fileId: string,
   pointId: number,
   type: UploadType,
-  fileName: string
+  fileName: string,
+  totalChunks: number
 ): Promise<void> {
   const res = await fetch('/api/upload/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, pointId, type, fileName }),
+    body: JSON.stringify({ fileId, pointId, type, fileName, totalChunks }),
   });
 
   const json = await res.json();
@@ -128,7 +129,7 @@ export async function uploadFile(
 
   // 通知合并
   onProgress({ phase: 'merging', percent: 100, message: '正在合并文件...' });
-  await completeUpload(fileId, pointId, type, originalName);
+  await completeUpload(fileId, pointId, type, originalName, totalChunks);
 
   onProgress({ phase: 'done', percent: 100, message: '上传完成' });
 }

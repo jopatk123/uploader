@@ -47,6 +47,32 @@ function validateType(type: string): string | null {
   return TYPE_COLUMN[type] ?? null;
 }
 
+/**
+ * 安全校验 fileId：仅允许字母、数字、下划线、短横线、点号
+ * 防止路径遍历攻击（如 ../../../etc/cron.d/evil）
+ */
+function isValidFileId(fileId: string): boolean {
+  return typeof fileId === 'string' && /^[a-zA-Z0-9_.-]+$/.test(fileId);
+}
+
+/**
+ * 安全校验分片序号：必须为非负整数
+ */
+function isValidChunkIndex(index: unknown): boolean {
+  if (typeof index !== 'string' && typeof index !== 'number') return false;
+  const n = Number(index);
+  return Number.isInteger(n) && n >= 0 && n <= 100000;
+}
+
+/**
+ * 安全校验点位ID：必须为正整数
+ */
+function isValidPointId(pointId: unknown): boolean {
+  if (typeof pointId !== 'string' && typeof pointId !== 'number') return false;
+  const n = Number(pointId);
+  return Number.isInteger(n) && n > 0;
+}
+
 // multer 配置：使用内存存储，避免 destination 回调时 req.body 未解析的问题
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -61,8 +87,41 @@ const upload = multer({
 router.post('/chunk', upload.single('chunk'), (req, res) => {
   const { fileId, index, totalChunks, pointId, type, fileName } = req.body;
 
-  if (!fileId || index === undefined || !totalChunks || !pointId || !type || !fileName) {
-    res.status(400).json({ success: false, error: '缺少必要参数' });
+  if (!fileId || !isValidFileId(fileId)) {
+    res.status(400).json({ success: false, error: 'fileId 参数非法' });
+    return;
+  }
+
+  if (!isValidChunkIndex(index)) {
+    res.status(400).json({ success: false, error: '分片序号参数非法' });
+    return;
+  }
+
+  if (!isValidPointId(pointId)) {
+    res.status(400).json({ success: false, error: 'pointId 参数非法' });
+    return;
+  }
+
+  if (!isValidPointId(totalChunks)) {
+    res.status(400).json({ success: false, error: 'totalChunks 参数非法' });
+    return;
+  }
+
+  if (!type || !validateType(type)) {
+    res.status(400).json({ success: false, error: 'type 参数非法' });
+    return;
+  }
+
+  if (!fileName || typeof fileName !== 'string') {
+    res.status(400).json({ success: false, error: 'fileName 参数非法' });
+    return;
+  }
+
+  // 后端二次校验文件后缀（与 /complete 保持一致，提前拦截非法类型）
+  const ext = path.extname(fileName).toLowerCase();
+  const allowedExts = isImageType(type) ? IMAGE_EXTS : VIDEO_EXTS;
+  if (!allowedExts.includes(ext)) {
+    res.status(400).json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
     return;
   }
 
@@ -72,6 +131,7 @@ router.post('/chunk', upload.single('chunk'), (req, res) => {
   }
 
   // 手动保存分片到 temp_chunk/{fileId}/chunk-{index}
+  // fileId 已通过白名单校验，index 已校验为非负整数，不存在路径遍历风险
   const chunkDir = path.join(TEMP_CHUNK_DIR, fileId);
   fs.mkdirSync(chunkDir, { recursive: true });
   const chunkPath = path.join(chunkDir, `chunk-${index}`);
@@ -79,7 +139,7 @@ router.post('/chunk', upload.single('chunk'), (req, res) => {
 
   res.json({
     success: true,
-    data: { fileId, index: parseInt(index), totalChunks: parseInt(totalChunks) },
+    data: { fileId, index: Number(index), totalChunks: Number(totalChunks) },
   });
 });
 
@@ -89,8 +149,8 @@ router.post('/chunk', upload.single('chunk'), (req, res) => {
  */
 router.get('/check', (req, res) => {
   const { fileId } = req.query;
-  if (!fileId || typeof fileId !== 'string') {
-    res.status(400).json({ success: false, error: '缺少 fileId' });
+  if (!fileId || typeof fileId !== 'string' || !isValidFileId(fileId)) {
+    res.status(400).json({ success: false, error: 'fileId 参数非法' });
     return;
   }
 
@@ -139,9 +199,24 @@ function safeUnlink(p: string): void {
  *   - 不会出现「数据库指向已删除文件」的破坏性场景
  */
 router.post('/complete', async (req, res) => {
-  const { fileId, pointId, type, fileName } = req.body;
+  const { fileId, pointId, type, fileName, totalChunks } = req.body;
 
-  if (!fileId || !pointId || !type || !fileName) {
+  if (!fileId || !isValidFileId(fileId)) {
+    res.status(400).json({ success: false, error: 'fileId 参数非法' });
+    return;
+  }
+
+  if (!isValidPointId(pointId)) {
+    res.status(400).json({ success: false, error: 'pointId 参数非法' });
+    return;
+  }
+
+  if (!isValidPointId(totalChunks)) {
+    res.status(400).json({ success: false, error: 'totalChunks 参数非法' });
+    return;
+  }
+
+  if (!type || !fileName) {
     res.status(400).json({ success: false, error: '缺少必要参数' });
     return;
   }
@@ -166,6 +241,14 @@ router.post('/complete', async (req, res) => {
     return;
   }
 
+  // 校验点位是否存在于数据库中（防止向无效点位写入文件后产生孤儿文件）
+  const pointRow = db.prepare('SELECT id FROM point_info WHERE id = ?').get(Number(pointId));
+  if (!pointRow) {
+    await fse.remove(chunkDir);
+    res.status(400).json({ success: false, error: '点位不存在' });
+    return;
+  }
+
   // 读取所有分片并按序号排序
   const chunkFiles = fs.readdirSync(chunkDir)
     .filter(f => f.match(/^chunk-\d+$/))
@@ -180,6 +263,17 @@ router.post('/complete', async (req, res) => {
     return;
   }
 
+  // 校验分片完整性：实际分片数必须等于声明的 totalChunks
+  const expectedTotal = Number(totalChunks);
+  if (chunkFiles.length !== expectedTotal) {
+    await fse.remove(chunkDir);
+    res.status(400).json({
+      success: false,
+      error: `分片不完整（期望 ${expectedTotal} 个，实际 ${chunkFiles.length} 个），请重新上传`,
+    });
+    return;
+  }
+
   const pointStorageDir = path.join(STORAGE_DIR, `point_${pointId}`);
   await fse.ensureDir(pointStorageDir);
 
@@ -191,11 +285,11 @@ router.post('/complete', async (req, res) => {
   let totalSize = 0;
 
   try {
-    // ── 步骤1：合并分片到 .tmp 临时文件 ──
+    // ── 步骤1：合并分片到 .tmp 临时文件（异步读取，避免阻塞事件循环） ──
     const writeStream = fs.createWriteStream(tmpFilePath);
     for (const chunkFile of chunkFiles) {
       const chunkPath = path.join(chunkDir, chunkFile);
-      const chunkBuf = fs.readFileSync(chunkPath);
+      const chunkBuf = await fse.readFile(chunkPath);
       totalSize += chunkBuf.length;
       writeStream.write(chunkBuf);
     }

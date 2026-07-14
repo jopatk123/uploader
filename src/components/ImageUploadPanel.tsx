@@ -1,12 +1,10 @@
 /**
  * 图片上传面板
  * 支持 jpg/png/webp，单张上限20MB
- * EXIF 保护策略：原图在限制内时跳过压缩直接上传，完整保留 GPS/拍摄时间等元数据；
- * 仅当原图超限时才压缩，并显式 preserveExif。
+ * EXIF 保护策略：原图直接上传，完整保留 GPS/拍摄时间等元数据，不做压缩。
  * 通过 type 区分主图（img）与备选图（img_alt）。
  */
 import { useState, useRef } from 'react';
-import imageCompression from 'browser-image-compression';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 
@@ -20,8 +18,6 @@ interface Props {
 }
 
 const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
-// 超过该阈值才触发画质压缩（避免 Canvas 重绘丢失 EXIF）
-const COMPRESS_THRESHOLD = 20 * 1024 * 1024;
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 export default function ImageUploadPanel({
@@ -35,7 +31,6 @@ export default function ImageUploadPanel({
   const inputId = isAlt ? 'image-input-alt' : 'image-input';
 
   const [file, setFile] = useState<File | null>(null);
-  const [compressProgress, setCompressProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -81,29 +76,12 @@ export default function ImageUploadPanel({
       setSuccess(false);
       setError(null);
 
-      // EXIF 保护：原图在限制内时直接上传，跳过 Canvas 重绘，完整保留元数据
-      let uploadBlob: Blob = originalFile;
+      // EXIF 保护：原图直接上传，不做任何压缩，完整保留 GPS/拍摄时间等元数据
       const fileId = generateFileId(originalFile);
-
-      if (originalFile.size > COMPRESS_THRESHOLD) {
-        // 大图才压缩，并显式保留 EXIF
-        setCompressProgress(0);
-        uploadBlob = await imageCompression(originalFile, {
-          maxSizeMB: 20,
-          maxWidthOrHeight: undefined,
-          useWebWorker: true,
-          preserveExif: true,
-          onProgress: (p) => setCompressProgress(p),
-        });
-        setCompressProgress(100);
-      } else {
-        // 跳过压缩，直接用原图（完整保留 EXIF）
-        setCompressProgress(100);
-      }
 
       // 分片上传（type 区分主图/备选图）
       await uploadFile(
-        uploadBlob,
+        originalFile,
         originalFile.name,
         pointId,
         type,
@@ -127,7 +105,6 @@ export default function ImageUploadPanel({
   };
 
   const isUploading = uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
-  const isCompressing = compressProgress > 0 && compressProgress < 100;
 
   const title = isAlt ? '备选图片上传' : '图片上传';
   const accentColor = isAlt ? 'bg-status-yellow' : 'bg-accent';
@@ -156,16 +133,16 @@ export default function ImageUploadPanel({
         type="file"
         accept=".jpg,.jpeg,.png,.webp"
         onChange={handleFileSelect}
-        disabled={disabled || isUploading || isCompressing}
+        disabled={disabled || isUploading}
         className="hidden"
         id={inputId}
       />
 
       <label
-        htmlFor={disabled || isUploading || isCompressing ? '' : inputId}
+        htmlFor={disabled || isUploading ? '' : inputId}
         className={`
           block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
-          ${disabled || isUploading || isCompressing
+          ${disabled || isUploading
             ? 'border-base-600 cursor-not-allowed'
             : `border-base-500 ${borderColor} ${hoverBg}`
           }
@@ -183,13 +160,6 @@ export default function ImageUploadPanel({
           </div>
         )}
       </label>
-
-      {/* 压缩进度 */}
-      {compressProgress > 0 && compressProgress < 100 && (
-        <div className="mt-4">
-          <ProgressBar percent={compressProgress} label="图片压缩中" variant="compress" />
-        </div>
-      )}
 
       {/* 上传进度 */}
       {uploadProgress && (

@@ -46,6 +46,16 @@ export default function AdminPage() {
   const [batchDownloading, setBatchDownloading] = useState<MaterialType | null>(null);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
+  const handleAuthError = useCallback((err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('Token') || msg.includes('403')) {
+      setAuthed(false);
+      clearToken();
+      return true;
+    }
+    return false;
+  }, []);
+
   const loadPoints = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -53,17 +63,13 @@ export default function AdminPage() {
       const data = await adminFetchPoints(filter);
       setPoints(data);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '加载失败';
-      if (msg.includes('Token') || msg.includes('403')) {
-        setAuthed(false);
-        clearToken();
-      } else {
-        setError(msg);
+      if (!handleAuthError(err)) {
+        setError(err instanceof Error ? err.message : '加载失败');
       }
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, handleAuthError]);
 
   useEffect(() => {
     if (authed) {
@@ -90,7 +96,9 @@ export default function AdminPage() {
       const detail = await adminFetchPointDetail(id);
       setDetailPoint(detail);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '获取详情失败');
+      if (!handleAuthError(err)) {
+        setError(err instanceof Error ? err.message : '获取详情失败');
+      }
     } finally {
       setDetailLoading(false);
     }
@@ -98,27 +106,31 @@ export default function AdminPage() {
 
   const handleClearAll = async (id: number) => {
     setError(null);
-    try {
-      // 清空4种素材
-      const point = points.find((p) => p.id === id);
-      if (!point) return;
-      const types: MaterialType[] = ['img', 'img_alt', 'video', 'video_alt'];
-      for (const t of types) {
-        const hasKey =
-          t === 'img'
-            ? 'has_image'
-            : t === 'img_alt'
-              ? 'has_image_alt'
-              : t === 'video'
-                ? 'has_video'
-                : 'has_video_alt';
-        if (point[hasKey]) {
+    const point = points.find((p) => p.id === id);
+    if (!point) return;
+    const types: MaterialType[] = ['img', 'img_alt', 'video', 'video_alt'];
+    const errors: string[] = [];
+    for (const t of types) {
+      const hasKey =
+        t === 'img'
+          ? 'has_image'
+          : t === 'img_alt'
+            ? 'has_image_alt'
+            : t === 'video'
+              ? 'has_video'
+              : 'has_video_alt';
+      if (point[hasKey]) {
+        try {
           await adminDeleteMaterial(id, t);
+        } catch (err) {
+          errors.push(err instanceof Error ? err.message : `${t} 删除失败`);
         }
       }
-      await loadPoints();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '清空失败');
+    }
+    // 无论部分成功或失败，都刷新列表以反映最新状态
+    await loadPoints();
+    if (errors.length > 0) {
+      setError(`部分素材删除失败: ${errors.join('; ')}`);
     }
   };
 

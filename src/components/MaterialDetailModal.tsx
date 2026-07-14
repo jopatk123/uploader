@@ -5,8 +5,8 @@
  *   - 下载（带进度条）
  *   - 删除
  */
-import { useState } from 'react';
-import { adminDownload, adminDeleteMaterial } from '@/lib/api';
+import { useState, useEffect, useCallback } from 'react';
+import { adminDownload, adminDeleteMaterial, getToken } from '@/lib/api';
 import ProgressBar from '@/components/ProgressBar';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import type { PointDetail, MaterialType } from '@/types';
@@ -36,6 +36,67 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<MaterialType | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+
+  /**
+   * 通过 Authorization Header 获取受保护的图片，转为 blob URL 用于预览
+   * 避免将 JWT token 暴露在 img src URL 中
+   */
+  const loadImageBlob = useCallback(async (path: string): Promise<string | null> => {
+    const token = getToken();
+    if (!token) return null;
+    try {
+      const res = await fetch(`/storage/${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /**
+   * 加载所有已上传图片的 blob URL，在组件卸载或点位变化时自动 revoke
+   */
+  useEffect(() => {
+    const imageMeta = MATERIAL_META.filter(m => m.isImage && point[m.hasKey] && point[m.pathKey]);
+    if (imageMeta.length === 0) return;
+
+    let cancelled = false;
+    const urls: Record<string, string> = {};
+    const errs: Record<string, boolean> = {};
+
+    (async () => {
+      for (const meta of imageMeta) {
+        const path = point[meta.pathKey];
+        if (!path) continue;
+        const blobUrl = await loadImageBlob(path);
+        if (cancelled) {
+          if (blobUrl) URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        if (blobUrl) {
+          urls[meta.type] = blobUrl;
+        } else {
+          errs[meta.type] = true;
+        }
+      }
+      setImageUrls(urls);
+      setImageErrors(errs);
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const url of Object.values(urls)) {
+        URL.revokeObjectURL(url);
+      }
+      setImageUrls({});
+      setImageErrors({});
+    };
+  }, [point, loadImageBlob]);
 
   const handleDownload = async (type: MaterialType) => {
     const meta = MATERIAL_META.find(m => m.type === type)!;
@@ -125,15 +186,21 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
 
                 {has && path ? (
                   <div className="space-y-3">
-                    {/* 图片预览 */}
+                    {/* 图片预览（通过 blob URL 展示受鉴权保护的图片） */}
                     {meta.isImage && (
                       <div className="bg-base-900 rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: '260px' }}>
-                        <img
-                          src={`/storage/${path}`}
-                          alt={`点位${point.id} ${meta.title}`}
-                          className="max-w-full object-contain"
-                          style={{ maxHeight: '260px' }}
-                        />
+                        {imageUrls[meta.type] ? (
+                          <img
+                            src={imageUrls[meta.type]}
+                            alt={`点位${point.id} ${meta.title}`}
+                            className="max-w-full object-contain"
+                            style={{ maxHeight: '260px' }}
+                          />
+                        ) : imageErrors[meta.type] ? (
+                          <div className="text-sm text-status-red py-8">图片加载失败</div>
+                        ) : (
+                          <div className="text-sm text-base-400 py-8 animate-pulse">加载图片中...</div>
+                        )}
                       </div>
                     )}
                     {!meta.isImage && (

@@ -141,19 +141,36 @@ function triggerDownload(blob: Blob, filename: string): void {
 }
 
 /**
+ * 获取一次性下载票据（需 JWT 鉴权）
+ * 票据 60 秒有效，仅可用一次，用于浏览器原生下载场景
+ */
+async function fetchDownloadTicket(): Promise<string> {
+  const res = await fetch('/api/admin/download-ticket', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  const json: ApiResponse<{ ticket: string }> = await res.json();
+  if (!json.success || !json.data) throw new Error(json.error || '获取下载票据失败');
+  return json.data.ticket;
+}
+
+/**
  * 管理员批量下载（zip 打包所有点位的某类型素材）
  *
- * 使用浏览器原生流式下载（不经过内存缓冲），由服务端 archiver 流式生成 zip、
- * 浏览器自动保存到磁盘。适用于大文件场景（100MB+ 到数GB）。
+ * 使用一次性下载票据替代 URL 中直接传递 JWT token，避免 token 泄露。
+ * 流程：先通过鉴权接口获取票据 → 用票据发起浏览器原生流式下载
  */
 export async function adminBatchDownload(type: MaterialType): Promise<void> {
   const token = getToken();
   if (!token) throw new Error('未登录');
 
-  // Token 通过 query 参数传递，使浏览器可以直接发起下载请求
-  const url = `/api/admin/batch-download?type=${type}&token=${encodeURIComponent(token)}`;
+  // 步骤1：获取一次性下载票据（通过 Authorization Header 鉴权）
+  const ticket = await fetchDownloadTicket();
 
-  // 触发浏览器原生下载 —— 浏览器会流式接收数据、直接写盘、显示原生下载进度
+  // 步骤2：用票据发起浏览器原生下载
+  // 票据 60 秒内有效且仅可用一次，即使泄露也无法重放
+  const url = `/api/admin/batch-download?type=${type}&ticket=${encodeURIComponent(ticket)}`;
+
   const a = document.createElement('a');
   a.href = url;
   a.download = ''; // 文件名由服务端 Content-Disposition 响应头决定
