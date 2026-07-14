@@ -4,8 +4,8 @@ FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# 配置 pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# 配置 pnpm（固定 v10，避免 v11 强制 deps status check 拦截构建）
+RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 
 # 安装依赖（利用缓存）
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile --config.minimumReleaseAge=0 --config.dangero
 
 # 复制源码并构建前端
 COPY . .
-RUN pnpm run build --config.verifyDepsBeforeRun=false
+RUN pnpm run build
 
 # ============ 运行阶段 ============
 FROM node:22-slim
@@ -21,7 +21,7 @@ FROM node:22-slim
 WORKDIR /app
 
 # 安装生产依赖与运行时
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 
 # 安装生产依赖
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
