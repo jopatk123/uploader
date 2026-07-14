@@ -53,10 +53,14 @@ describe('GET /api/points', () => {
 });
 
 describe('GET /api/health', () => {
-  it('返回 ok 状态', async () => {
+  it('返回健康状态（含 DB 可读性与磁盘空间）', async () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.message).toBe('ok');
+    expect(res.body.data.db).toBe('ok');
+    expect(res.body.data.degraded).toBe(false);
+    expect(res.body.data.disk).toBeDefined();
+    expect(typeof res.body.data.disk.freeMB).toBe('number');
+    expect(typeof res.body.data.disk.totalMB).toBe('number');
   });
 });

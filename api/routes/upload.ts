@@ -111,9 +111,32 @@ router.get('/check', (req, res) => {
 });
 
 /**
+ * 安全删除文件，吞掉异常并打印警告
+ */
+function safeUnlink(p: string): void {
+  if (!fs.existsSync(p)) return;
+  try {
+    fs.unlinkSync(p);
+  } catch (err) {
+    console.warn(`[upload/complete] 删除文件失败 ${p}:`, (err as Error).message);
+  }
+}
+
+/**
  * POST /api/upload/complete
  * 全部分片上传完毕，合并文件
  * body: { fileId, pointId, type, fileName }
+ *
+ * 崩溃一致性策略（防止进程被杀导致数据库与文件系统不一致）：
+ *   1. 分片合并到 .tmp 临时文件
+ *   2. 大小校验通过后，原子 rename 到最终路径（同分区 rename 是原子操作）
+ *   3. 在事务中查询旧路径并 UPDATE 数据库 → 指向新文件
+ *   4. 提交事务后才删除旧文件（最坏情况留下孤儿文件，可被定时清理兜底）
+ *   5. 最后清理分片临时目录
+ *
+ * 上述顺序确保任意时刻进程被杀：
+ *   - 数据库始终指向「真实存在的文件」（旧文件或新文件）
+ *   - 不会出现「数据库指向已删除文件」的破坏性场景
  */
 router.post('/complete', async (req, res) => {
   const { fileId, pointId, type, fileName } = req.body;
@@ -157,18 +180,19 @@ router.post('/complete', async (req, res) => {
     return;
   }
 
-  // 合并文件
   const pointStorageDir = path.join(STORAGE_DIR, `point_${pointId}`);
   await fse.ensureDir(pointStorageDir);
 
   const savedFileName = `${type}_${Date.now()}${ext}`;
   const savedFilePath = path.join(pointStorageDir, savedFileName);
+  const tmpFilePath = `${savedFilePath}.tmp`; // 临时文件，合并成功后再 rename
   const relPath = path.join(`point_${pointId}`, savedFileName);
 
-  const writeStream = fs.createWriteStream(savedFilePath);
   let totalSize = 0;
 
   try {
+    // ── 步骤1：合并分片到 .tmp 临时文件 ──
+    const writeStream = fs.createWriteStream(tmpFilePath);
     for (const chunkFile of chunkFiles) {
       const chunkPath = path.join(chunkDir, chunkFile);
       const chunkBuf = fs.readFileSync(chunkPath);
@@ -182,10 +206,10 @@ router.post('/complete', async (req, res) => {
       writeStream.on('error', reject);
     });
 
-    // 后端二次校验文件大小
+    // ── 步骤2：大小校验（在 rename 前，避免污染最终目录） ──
     const maxSize = isImageType(type) ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
     if (totalSize > maxSize) {
-      fs.unlinkSync(savedFilePath);
+      safeUnlink(tmpFilePath);
       await fse.remove(chunkDir);
       res.status(400).json({
         success: false,
@@ -194,40 +218,51 @@ router.post('/complete', async (req, res) => {
       return;
     }
 
-    // 删除旧素材文件（覆盖上传）
-    const existing = db.prepare(
-      `SELECT img_path, img_path_alt, video_path, video_path_alt FROM point_material WHERE point_id = ?`
-    ).get(pointId) as Record<string, string | null> | undefined;
+    // ── 步骤3：原子 rename 临时文件到最终路径 ──
+    // 同分区 rename 是原子操作，进程被杀时不会留下半截文件
+    fs.renameSync(tmpFilePath, savedFilePath);
 
-    if (existing) {
-      const oldPath = existing[column];
-      if (oldPath) {
-        const oldFullPath = path.join(STORAGE_DIR, oldPath);
-        if (fs.existsSync(oldFullPath)) {
-          fs.unlinkSync(oldFullPath);
-        }
+    // ── 步骤4：事务内查询旧路径并更新数据库 ──
+    // better-sqlite3 同步执行 + transaction 保证查询+更新的原子性
+    // 即使此处崩溃，最坏情况是新文件成孤儿，旧文件仍可访问，数据库一致性不受影响
+    const { oldPath } = db.transaction(() => {
+      const row = db.prepare(
+        `SELECT ${column} AS old_path FROM point_material WHERE point_id = ?`
+      ).get(pointId) as { old_path: string | null } | undefined;
+
+      const old = row?.old_path ?? null;
+
+      db.prepare(`
+        UPDATE point_material
+        SET ${column} = ?, upload_time = datetime('now')
+        WHERE point_id = ?
+      `).run(relPath, pointId);
+
+      return { oldPath: old };
+    })();
+
+    // ── 步骤5：数据库提交后清理旧文件 ──
+    // 放在事务外：即使删除失败也不影响数据库一致性，最坏留下孤儿文件
+    if (oldPath) {
+      const oldFullPath = path.join(STORAGE_DIR, oldPath);
+      // 防御：避免误删新文件
+      if (oldFullPath !== savedFilePath) {
+        safeUnlink(oldFullPath);
       }
     }
 
-    // 更新数据库
-    db.prepare(`
-      UPDATE point_material
-      SET ${column} = ?, upload_time = datetime('now')
-      WHERE point_id = ?
-    `).run(relPath, pointId);
-
-    // 清理分片临时目录
+    // ── 步骤6：清理分片临时目录 ──
     await fse.remove(chunkDir);
 
     res.json({
       success: true,
       data: { pointId: parseInt(pointId), type, path: relPath, size: totalSize },
     });
-  } catch {
-    // 清理失败文件
-    if (fs.existsSync(savedFilePath)) {
-      fs.unlinkSync(savedFilePath);
-    }
+  } catch (err) {
+    console.error('[upload/complete] 合并失败:', (err as Error).message);
+    // 清理临时文件与最终文件（均可能因崩溃残留）
+    safeUnlink(tmpFilePath);
+    safeUnlink(savedFilePath);
     await fse.remove(chunkDir);
     res.status(500).json({ success: false, error: '文件合并失败' });
   }

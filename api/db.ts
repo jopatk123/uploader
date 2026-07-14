@@ -1,5 +1,12 @@
 /**
  * SQLite 数据库初始化与管理
+ *
+ * 崩溃/损坏防护策略：
+ *   - 启动时执行 quick_check 完整性检查
+ *   - 检查失败 → 降级恢复：重命名坏库为 .corrupt-{ts}（保留供人工分析）
+ *     → 清理 WAL/SHM → 重建空库 → 重新初始化 140 点位
+ *   - storage 目录中的素材文件保留，但 DB 记录已丢失，需人工合并
+ *   - 运行时损坏由 HEALTHCHECK 检测并触发容器重启 → 回到启动检查流程
  */
 import Database from 'better-sqlite3';
 import path from 'path';
@@ -21,10 +28,108 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(STORAGE_DIR, { recursive: true });
 fs.mkdirSync(TEMP_CHUNK_DIR, { recursive: true });
 
-// 初始化数据库
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+/**
+ * 数据库运行状态（供健康检查接口读取）
+ * - degraded=true 表示当前库是从损坏恢复而来的空库，原数据已丢失
+ */
+export const dbStatus = {
+  degraded: false,
+};
+
+/**
+ * 应用 pragma 设置到数据库连接
+ */
+function applyPragmas(conn: Database.Database): void {
+  // WAL 模式：崩溃恢复能力优于 DELETE 模式，提交的事务不会丢失
+  conn.pragma('journal_mode = WAL');
+  // 外键约束
+  conn.pragma('foreign_keys = ON');
+  // 写入忙等待 5s，避免并发写入时立即抛 SQLITE_BUSY
+  conn.pragma('busy_timeout = 5000');
+  // synchronous = FULL：WAL+NORMAL 在断电时可能丢最后一个事务，FULL 最安全
+  // 本项目「上传数据珍贵」场景，牺牲少量写入性能换取最强持久化保证
+  conn.pragma('synchronous = FULL');
+}
+
+/**
+ * 完整性检查（quick_check 比 integrity_check 快，只验证 B-tree 结构）
+ * 返回 true 表示健康
+ */
+function checkIntegrity(conn: Database.Database): boolean {
+  try {
+    const result = conn.pragma('quick_check', { simple: true });
+    return result === 'ok';
+  } catch (err) {
+    console.error('[db] 完整性检查抛错:', (err as Error).message);
+    return false;
+  }
+}
+
+/**
+ * 损坏降级恢复：
+ *   1. 重命名坏库为 .corrupt-{ts}（保留以供人工分析，不直接删除）
+ *   2. 清理残留的 WAL/SHM 文件
+ *   3. 重新打开 + 应用 pragma + 再次完整性检查
+ *   4. 失败则抛错（疑似磁盘硬件故障，无法软件层面恢复）
+ *
+ * 注意：storage 中的素材文件保留，但 DB 记录已丢失，需人工合并
+ */
+function recoverFromCorruption(): Database.Database {
+  console.error('[db] ⚠️ 数据库完整性检查失败，启动降级恢复流程');
+
+  // 重命名坏库（保留以供人工分析）
+  const corruptBackupPath = `${DB_PATH}.corrupt-${Date.now()}`;
+  try {
+    fs.renameSync(DB_PATH, corruptBackupPath);
+    console.error(`[db] 损坏数据库已重命名为: ${corruptBackupPath}`);
+  } catch (err) {
+    console.error('[db] 重命名失败，尝试直接删除:', (err as Error).message);
+    try {
+      fs.unlinkSync(DB_PATH);
+    } catch {
+      // 忽略
+    }
+  }
+
+  // 清理 WAL 和 SHM（重建时不需要旧的日志，否则可能再次损坏）
+  for (const suffix of ['-wal', '-shm']) {
+    const p = `${DB_PATH}${suffix}`;
+    if (fs.existsSync(p)) {
+      try {
+        fs.unlinkSync(p);
+      } catch {
+        // 忽略
+      }
+    }
+  }
+
+  // 重新打开
+  const newConn = new Database(DB_PATH);
+  applyPragmas(newConn);
+
+  // 新库必须健康
+  if (!checkIntegrity(newConn)) {
+    throw new Error('数据库降级恢复失败：新库仍不健康（疑似磁盘硬件故障，请检查服务器）');
+  }
+
+  console.warn('[db] 降级恢复完成，已重建空库。storage 中的素材文件保留但 DB 记录丢失，需人工合并');
+  return newConn;
+}
+
+// ── 初始化数据库连接（含完整性检查与降级恢复） ──
+let db: Database.Database = new Database(DB_PATH);
+applyPragmas(db);
+
+if (!checkIntegrity(db)) {
+  // 损坏 → 关闭当前连接 → 降级恢复
+  try {
+    db.close();
+  } catch {
+    // 忽略
+  }
+  db = recoverFromCorruption();
+  dbStatus.degraded = true;
+}
 
 /**
  * 初始化表结构与固定点位数据
