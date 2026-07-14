@@ -9,7 +9,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # 安装依赖（利用缓存）
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-RUN pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+RUN pnpm install --frozen-lockfile --config.minimumReleaseAge=0 --config.dangerouslyAllowAllBuilds=true
 
 # 复制源码并构建前端
 COPY . .
@@ -25,7 +25,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # 安装生产依赖
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-RUN pnpm install --prod --frozen-lockfile --config.minimumReleaseAge=0 && pnpm rebuild better-sqlite3
+RUN pnpm install --prod --frozen-lockfile --config.minimumReleaseAge=0 --config.dangerouslyAllowAllBuilds=true
 
 # 复制构建产物和后端代码
 COPY --from=builder /app/dist ./dist
