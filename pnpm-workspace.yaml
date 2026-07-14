@@ -1,0 +1,4 @@
+# pnpm 10+ 配置（取代 package.json 中的 pnpm 字段）
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
