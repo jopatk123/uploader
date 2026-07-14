@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-const API = 'http://localhost:3001';
+const API = process.env.API || 'http://localhost:3001';
 const POINT_ID_IMG = 11; // 测试用点位
 const POINT_ID_VIDEO = 12;
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
@@ -186,6 +186,12 @@ async function testUploadFile(filePath, pointId, type) {
 
 async function main() {
   log('========== 端到端上传测试开始 ==========');
+  log(`API: ${API}`);
+
+  const isRemote = !API.includes('localhost') && !API.includes('127.0.0.1');
+  if (isRemote) {
+    log('远程模式：跳过本地存储文件校验，仅校验下载内容');
+  }
 
   // 健康检查
   const health = await req(`${API}/api/health`);
@@ -213,15 +219,19 @@ async function main() {
   if (!imgDetail.has_image) fail('数据库未记录图片素材');
   log(`  数据库记录: img_path=${imgDetail.img_path}`);
 
-  // 校验存储文件 sha256
-  const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-  const storedImgPath = path.join(DATA_DIR, 'storage', imgDetail.img_path);
-  const storedImgBuf = fs.readFileSync(storedImgPath);
-  const storedImgSha = sha256(storedImgBuf);
-  if (storedImgSha !== originalImgSha) {
-    fail(`图片 sha256 不匹配\n  原始: ${originalImgSha}\n  存储: ${storedImgSha}`);
+  // 校验存储文件 sha256（仅本地模式）
+  if (!isRemote) {
+    const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    const storedImgPath = path.join(DATA_DIR, 'storage', imgDetail.img_path);
+    const storedImgBuf = fs.readFileSync(storedImgPath);
+    const storedImgSha = sha256(storedImgBuf);
+    if (storedImgSha !== originalImgSha) {
+      fail(`图片 sha256 不匹配\n  原始: ${originalImgSha}\n  存储: ${storedImgSha}`);
+    }
+    log(`  文件 sha256 校验通过: ${storedImgSha.slice(0, 16)}...`);
+  } else {
+    log('  跳过本地存储校验（远程模式）');
   }
-  log(`  文件 sha256 校验通过: ${storedImgSha.slice(0, 16)}...`);
 
   // ============ 测试视频上传 ============
   log('\n----- 视频上传测试 -----');
@@ -232,13 +242,18 @@ async function main() {
   if (!videoDetail.has_video) fail('数据库未记录视频素材');
   log(`  数据库记录: video_path=${videoDetail.video_path}`);
 
-  const storedVideoPath = path.join(DATA_DIR, 'storage', videoDetail.video_path);
-  const storedVideoBuf = fs.readFileSync(storedVideoPath);
-  const storedVideoSha = sha256(storedVideoBuf);
-  if (storedVideoSha !== originalVideoSha) {
-    fail(`视频 sha256 不匹配\n  原始: ${originalVideoSha}\n  存储: ${storedVideoSha}`);
+  if (!isRemote) {
+    const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    const storedVideoPath = path.join(DATA_DIR, 'storage', videoDetail.video_path);
+    const storedVideoBuf = fs.readFileSync(storedVideoPath);
+    const storedVideoSha = sha256(storedVideoBuf);
+    if (storedVideoSha !== originalVideoSha) {
+      fail(`视频 sha256 不匹配\n  原始: ${originalVideoSha}\n  存储: ${storedVideoSha}`);
+    }
+    log(`  文件 sha256 校验通过: ${storedVideoSha.slice(0, 16)}...`);
+  } else {
+    log('  跳过本地存储校验（远程模式）');
   }
-  log(`  文件 sha256 校验通过: ${storedVideoSha.slice(0, 16)}...`);
 
   // ============ 测试覆盖上传 ============
   log('\n----- 覆盖上传测试 -----');
@@ -250,11 +265,17 @@ async function main() {
   }
   log(`  旧文件路径: ${imgDetail.img_path}`);
   log(`  新文件路径: ${reDetail.img_path}`);
-  // 旧文件应已被删除
-  if (fs.existsSync(storedImgPath)) {
-    fail(`旧文件未被删除: ${storedImgPath}`);
+
+  if (!isRemote) {
+    const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+    const oldStoredPath = path.join(DATA_DIR, 'storage', imgDetail.img_path);
+    if (fs.existsSync(oldStoredPath)) {
+      fail(`旧文件未被删除: ${oldStoredPath}`);
+    }
+    log('  旧文件已删除');
+  } else {
+    log('  跳过旧文件删除校验（远程模式）');
   }
-  log('  旧文件已删除');
 
   // ============ 测试下载 ============
   log('\n----- 下载测试 -----');
