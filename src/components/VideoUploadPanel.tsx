@@ -3,7 +3,7 @@
  * 仅 mp4，≥100MB直接拦截并弹窗指引，不做任何压缩，分片上传
  * 通过 type 区分主视频（video）与备选视频（video_alt）。
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 
@@ -36,6 +36,15 @@ export default function VideoUploadPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 切换点位时重置面板状态
+  useEffect(() => {
+    setFile(null);
+    setUploadProgress(null);
+    setError(null);
+    setSuccess(false);
+    if (inputRef.current) inputRef.current.value = '';
+  }, [pointId]);
 
   const disabled = pointId === null;
 

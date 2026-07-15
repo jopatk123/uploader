@@ -4,7 +4,7 @@
  * 超过 10MB 的图片在前端自动压缩到 10MB 以内，尽量保留 EXIF 元数据。
  * 通过 type 区分主图（img）与备选图（img_alt）。
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 import { compressImageIfNeeded, shouldCompress } from '@/lib/imageCompress';
@@ -35,6 +35,15 @@ export default function ImageUploadPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 切换点位时重置面板状态
+  useEffect(() => {
+    setFile(null);
+    setUploadProgress(null);
+    setError(null);
+    setSuccess(false);
+    if (inputRef.current) inputRef.current.value = '';
+  }, [pointId]);
 
   const disabled = pointId === null;
 

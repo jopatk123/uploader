@@ -152,6 +152,7 @@ export default function UploadPage() {
           {/* 右侧：上传区（4面板：主图/备选图/主视频/备选视频） */}
           <div className="col-span-2 grid grid-cols-2 gap-4">
             <ImageUploadPanel
+              key={`${selectedId ?? 'none'}-img`}
               pointId={selectedId}
               hasExisting={!!selectedPoint?.has_image}
               onUploadComplete={loadPoints}
@@ -159,6 +160,7 @@ export default function UploadPage() {
               type="img"
             />
             <ImageUploadPanel
+              key={`${selectedId ?? 'none'}-img_alt`}
               pointId={selectedId}
               hasExisting={!!selectedPoint?.has_image_alt}
               onUploadComplete={loadPoints}
@@ -166,6 +168,7 @@ export default function UploadPage() {
               type="img_alt"
             />
             <VideoUploadPanel
+              key={`${selectedId ?? 'none'}-video`}
               pointId={selectedId}
               hasExisting={!!selectedPoint?.has_video}
               onUploadComplete={loadPoints}
@@ -174,6 +177,7 @@ export default function UploadPage() {
               type="video"
             />
             <VideoUploadPanel
+              key={`${selectedId ?? 'none'}-video_alt`}
               pointId={selectedId}
               hasExisting={!!selectedPoint?.has_video_alt}
               onUploadComplete={loadPoints}
