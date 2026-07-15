@@ -155,12 +155,15 @@ async function fetchDownloadTicket(): Promise<string> {
 }
 
 /**
- * 管理员批量下载（zip 打包所有点位的某类型素材）
+ * 管理员批量下载（zip 打包点位的某类型素材）
  *
  * 使用一次性下载票据替代 URL 中直接传递 JWT token，避免 token 泄露。
  * 流程：先通过鉴权接口获取票据 → 用票据发起浏览器原生流式下载
+ *
+ * @param type 素材类型
+ * @param ids  可选：仅下载指定点位；不传或传空数组则下载全部已上传该类型素材的点位
  */
-export async function adminBatchDownload(type: MaterialType): Promise<void> {
+export async function adminBatchDownload(type: MaterialType, ids?: number[]): Promise<void> {
   const token = getToken();
   if (!token) throw new Error('未登录');
 
@@ -169,7 +172,10 @@ export async function adminBatchDownload(type: MaterialType): Promise<void> {
 
   // 步骤2：用票据发起浏览器原生下载
   // 票据 60 秒内有效且仅可用一次，即使泄露也无法重放
-  const url = `/api/admin/batch-download?type=${type}&ticket=${encodeURIComponent(ticket)}`;
+  let url = `/api/admin/batch-download?type=${type}&ticket=${encodeURIComponent(ticket)}`;
+  if (ids && ids.length > 0) {
+    url += `&ids=${encodeURIComponent(ids.join(','))}`;
+  }
 
   const a = document.createElement('a');
   a.href = url;

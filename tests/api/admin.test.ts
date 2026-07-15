@@ -297,4 +297,36 @@ describe('管理员批量下载接口', () => {
     const res = await request(app).get(`/api/admin/batch-download?type=img&ticket=${ticket}`);
     expect(res.status).toBe(403);
   });
+
+  it('ids 参数含非数字时返回 400', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/batch-download?type=img&ids=1,abc,3&ticket=${ticket}`,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('ids');
+  });
+
+  it('ids 参数含 0 或负数时返回 400', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/batch-download?type=img&ids=0,5&ticket=${ticket}`);
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('传入合法 ids 但无对应素材时返回 404', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/batch-download?type=img&ids=1,2,3&ticket=${ticket}`,
+    );
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('不传 ids 时行为与原批量下载一致（无素材返回 404）', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/batch-download?type=img&ticket=${ticket}`);
+    expect(res.status).toBe(404);
+  });
 });

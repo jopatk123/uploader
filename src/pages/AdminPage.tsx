@@ -1,10 +1,11 @@
 /**
  * 管理员后台页面
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import LoginModal from '@/components/LoginModal';
 import MaterialDetailModal from '@/components/MaterialDetailModal';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import BatchDownloadToolbar from '@/components/BatchDownloadToolbar';
 import {
   adminLogin,
   adminFetchPoints,
@@ -16,6 +17,7 @@ import {
   clearToken,
 } from '@/lib/api';
 import type { PointStatus, PointDetail, MaterialType } from '@/types';
+import { getPointState } from '@/lib/utils';
 
 type FilterType = 'all' | 'img_only' | 'video_only' | 'completed';
 
@@ -26,13 +28,21 @@ const FILTERS: { value: FilterType; label: string }[] = [
   { value: 'completed', label: '主图+主视频' },
 ];
 
-/** 批量下载类型选项 */
-const BATCH_TYPES: { type: MaterialType; label: string; shortLabel: string }[] = [
-  { type: 'img', label: '主图片', shortLabel: '图片' },
-  { type: 'img_alt', label: '备选图片', shortLabel: '备图' },
-  { type: 'video', label: '主视频', shortLabel: '视频' },
-  { type: 'video_alt', label: '备选视频', shortLabel: '备视频' },
-];
+/** MaterialType → has_xxx 字段名（用于按类型统计已上传数量） */
+const HAS_KEY: Record<MaterialType, keyof PointStatus> = {
+  img: 'has_image',
+  img_alt: 'has_image_alt',
+  video: 'has_video',
+  video_alt: 'has_video_alt',
+};
+
+/** MaterialType → 中文标签 */
+const TYPE_LABEL: Record<MaterialType, string> = {
+  img: '主图片',
+  img_alt: '备选图片',
+  video: '主视频',
+  video_alt: '备选视频',
+};
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(!!getToken());
@@ -45,6 +55,8 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [batchDownloading, setBatchDownloading] = useState<MaterialType | null>(null);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
+  // 选中的点位 ID 集合（用于批量下载的选择模式）
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const handleAuthError = useCallback((err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : '';
@@ -62,6 +74,16 @@ export default function AdminPage() {
     try {
       const data = await adminFetchPoints(filter);
       setPoints(data);
+      // 清理已不存在的选中项（如筛选条件切换后某些点位不再在列表中）
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return prev;
+        const visibleIds = new Set(data.map((p) => p.id));
+        const next = new Set<number>();
+        for (const id of prev) {
+          if (visibleIds.has(id)) next.add(id);
+        }
+        return next;
+      });
     } catch (err) {
       if (!handleAuthError(err)) {
         setError(err instanceof Error ? err.message : '加载失败');
@@ -87,6 +109,7 @@ export default function AdminPage() {
     clearToken();
     setAuthed(false);
     setPoints([]);
+    setSelectedIds(new Set());
   };
 
   const openDetail = async (id: number) => {
@@ -111,14 +134,7 @@ export default function AdminPage() {
     const types: MaterialType[] = ['img', 'img_alt', 'video', 'video_alt'];
     const errors: string[] = [];
     for (const t of types) {
-      const hasKey =
-        t === 'img'
-          ? 'has_image'
-          : t === 'img_alt'
-            ? 'has_image_alt'
-            : t === 'video'
-              ? 'has_video'
-              : 'has_video_alt';
+      const hasKey = HAS_KEY[t];
       if (point[hasKey]) {
         try {
           await adminDeleteMaterial(id, t);
@@ -134,20 +150,16 @@ export default function AdminPage() {
     }
   };
 
-  const handleBatchDownload = async (type: MaterialType) => {
-    const meta = BATCH_TYPES.find((b) => b.type === type)!;
-    const hasKey =
-      type === 'img'
-        ? 'has_image'
-        : type === 'img_alt'
-          ? 'has_image_alt'
-          : type === 'video'
-            ? 'has_video'
-            : 'has_video_alt';
-    const count = points.filter((p) => p[hasKey]).length;
+  const handleBatchDownload = async (type: MaterialType, ids?: number[]) => {
+    const label = TYPE_LABEL[type];
+    const hasKey = HAS_KEY[type];
+    // 根据是否传入 ids 决定统计范围（仅用于提示文案，后端会再次过滤未上传素材的点位）
+    const pool = ids ? points.filter((p) => ids.includes(p.id)) : points;
+    const count = pool.filter((p) => p[hasKey]).length;
+    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '全部点位';
 
     if (count === 0) {
-      setBatchMsg(`暂无已上传的${meta.label}素材`);
+      setBatchMsg(`${scopeLabel}中暂无已上传的${label}素材`);
       setTimeout(() => setBatchMsg(null), 3000);
       return;
     }
@@ -156,37 +168,66 @@ export default function AdminPage() {
     setBatchMsg(null);
     setError(null);
     try {
-      await adminBatchDownload(type);
+      await adminBatchDownload(type, ids);
       // 浏览器原生下载已触发，文件将出现在浏览器下载栏中
-      setBatchMsg(`${meta.label}共 ${count} 个文件，下载已开始`);
+      setBatchMsg(`${scopeLabel} ${label}共 ${count} 个文件，下载已开始`);
       setTimeout(() => setBatchMsg(null), 5000);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : `${meta.label}批量下载失败`;
+      const msg = err instanceof Error ? err.message : `${label}批量下载失败`;
       setError(msg);
     } finally {
       setBatchDownloading(null);
     }
   };
 
+  // ── 选择操作 ──
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(points.map((p) => p.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const invertSelection = () => {
+    setSelectedIds((prev) => {
+      const next = new Set<number>();
+      for (const p of points) {
+        if (!prev.has(p.id)) next.add(p.id);
+      }
+      return next;
+    });
+  };
+
+  // 当前页是否全选（用于表头复选框的 indeterminate 状态）
+  const allSelected = points.length > 0 && selectedIds.size === points.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < points.length;
+
+  // 统计概览（必须在早期 return 之前调用，避免 Hook 顺序不一致）
+  const stats = useMemo(
+    () => ({
+      total: points.length,
+      hasImage: points.filter((p) => p.has_image).length,
+      hasImageAlt: points.filter((p) => p.has_image_alt).length,
+      hasVideo: points.filter((p) => p.has_video).length,
+      hasVideoAlt: points.filter((p) => p.has_video_alt).length,
+      completed: points.filter((p) => p.has_image && p.has_video).length,
+    }),
+    [points],
+  );
+
   if (!authed) {
     return <LoginModal onLogin={handleLogin} />;
   }
-
-  const stats = {
-    total: points.length,
-    hasImage: points.filter((p) => p.has_image).length,
-    hasImageAlt: points.filter((p) => p.has_image_alt).length,
-    hasVideo: points.filter((p) => p.has_video).length,
-    hasVideoAlt: points.filter((p) => p.has_video_alt).length,
-    completed: points.filter((p) => p.has_image && p.has_video).length,
-  };
-
-  const statsByType: Record<MaterialType, number> = {
-    img: stats.hasImage,
-    img_alt: stats.hasImageAlt,
-    video: stats.hasVideo,
-    video_alt: stats.hasVideoAlt,
-  };
 
   return (
     <div className="min-h-screen bg-base-900">
@@ -230,34 +271,17 @@ export default function AdminPage() {
           <StatCard label="主图+主视频" value={stats.completed} color="text-status-green" />
         </div>
 
-        {/* 批量下载工具栏 */}
-        <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-base-700 border border-base-600 rounded-lg">
-          <span className="text-xs text-base-400 font-mono">批量下载:</span>
-          {BATCH_TYPES.map((bt) => {
-            const count = statsByType[bt.type];
-            const isDownloading = batchDownloading === bt.type;
-            const isAlt = bt.type.endsWith('_alt');
-            const colorClass = isAlt
-              ? 'bg-status-yellow/20 border-status-yellow/40 text-status-yellow hover:bg-status-yellow/30'
-              : 'bg-accent/20 border-accent/40 text-accent hover:bg-accent/30';
-            return (
-              <button
-                key={bt.type}
-                onClick={() => handleBatchDownload(bt.type)}
-                disabled={batchDownloading !== null || count === 0}
-                className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 ${colorClass}`}
-              >
-                {isDownloading && (
-                  <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-                )}
-                {isDownloading ? `打包${bt.shortLabel}中...` : `${bt.label} (${count})`}
-              </button>
-            );
-          })}
-          {batchMsg && (
-            <span className="text-xs text-status-green font-mono ml-auto">{batchMsg}</span>
-          )}
-        </div>
+        {/* 批量下载工具栏（含点位选择操作） */}
+        <BatchDownloadToolbar
+          points={points}
+          selectedIds={selectedIds}
+          downloading={batchDownloading}
+          batchMsg={batchMsg}
+          onDownload={handleBatchDownload}
+          onSelectAll={selectAll}
+          onClearSelection={clearSelection}
+          onInvertSelection={invertSelection}
+        />
 
         {error && (
           <div className="mb-4 p-3 bg-status-red/10 border border-status-red/30 rounded text-sm text-status-red">
@@ -294,6 +318,22 @@ export default function AdminPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-base-800 border-b border-base-600 text-xs font-mono text-base-400">
+                <th className="text-center px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    checked={allSelected}
+                    onChange={() => {
+                      if (allSelected) clearSelection();
+                      else selectAll();
+                    }}
+                    disabled={loading || points.length === 0}
+                    className="w-4 h-4 cursor-pointer accent-current"
+                    title="全选/取消全选"
+                  />
+                </th>
                 <th className="text-left px-4 py-3">序号</th>
                 <th className="text-left px-4 py-3">区县</th>
                 <th className="text-left px-4 py-3">岸段类型</th>
@@ -313,24 +353,36 @@ export default function AdminPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-base-400">
+                  <td colSpan={9} className="text-center py-12 text-base-400">
                     加载中...
                   </td>
                 </tr>
               ) : points.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-base-400">
+                  <td colSpan={9} className="text-center py-12 text-base-400">
                     无符合条件的点位
                   </td>
                 </tr>
               ) : (
                 points.map((p) => {
                   const hasAny = p.has_image || p.has_image_alt || p.has_video || p.has_video_alt;
+                  const isChecked = selectedIds.has(p.id);
                   return (
                     <tr
                       key={p.id}
-                      className="border-b border-base-600/50 hover:bg-base-600/30 transition-colors"
+                      className={`border-b border-base-600/50 hover:bg-base-600/30 transition-colors ${
+                        isChecked ? 'bg-accent/10' : ''
+                      }`}
                     >
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelect(p.id)}
+                          className="w-4 h-4 cursor-pointer accent-current"
+                          title={`选择点位 #${p.id}`}
+                        />
+                      </td>
                       <td className="px-4 py-3 font-mono text-accent">#{p.id}</td>
                       <td className="px-4 py-3 text-base-200">{p.district}</td>
                       <td className="px-4 py-3 text-base-300">{p.shore_type}</td>

@@ -49,8 +49,33 @@ router.post('/login', (req, res) => {
 });
 
 /**
- * GET /api/admin/batch-download?type=img|img_alt|video|video_alt&ticket=xxx
- * 批量下载所有点位的某类型素材（zip 流式打包）
+ * 解析 ids 查询参数（逗号分隔的正整数字符串）
+ * 返回去重排序后的 ID 数组；参数缺失返回 null（表示不限制）；
+ * 任何非法字符返回抛出 Error（由调用方转为 400）
+ */
+function parseIdsParam(raw: unknown): number[] | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') return null;
+  const parts = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  if (parts.length === 0) return null;
+  const ids: number[] = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isInteger(n) || n <= 0) {
+      throw new Error(`ids 包含非法值: ${p}`);
+    }
+    ids.push(n);
+  }
+  // 去重 + 排序，便于日志和缓存友好
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+/**
+ * GET /api/admin/batch-download?type=img|img_alt|video|video_alt&ticket=xxx[&ids=1,2,3]
+ * 批量下载点位素材（zip 流式打包）
+ *   - 不传 ids：下载所有已上传该类型素材的点位
+ *   - 传 ids：仅下载指定点位中已上传该类型素材的部分（未上传的点位自动跳过）
+ *
  * 文件名规则：point_{id}_{city}_{district}_{type}.{ext}
  *
  * 鉴权方式：一次性下载票据（60秒有效，仅可用一次）
@@ -72,18 +97,32 @@ router.get('/batch-download', ticketMiddleware, (req, res) => {
     return;
   }
 
-  // 查询所有已上传该类型素材的点位
+  // 解析可选 ids 参数；非法值返回 400
+  let ids: number[] | null = null;
+  try {
+    ids = parseIdsParam(req.query.ids);
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+    return;
+  }
+
+  // 构造查询：默认全部，传 ids 时仅查询指定点位
+  // 使用动态占位符避免 SQL 注入
+  const placeholders = ids ? ids.map(() => '?').join(',') : null;
+  const idFilter = placeholders ? `AND p.id IN (${placeholders})` : '';
+  const params: unknown[] = ids ?? [];
+
   const rows = db
     .prepare(
       `
     SELECT p.id, p.city, p.district, m.${column} AS rel_path
     FROM point_info p
     INNER JOIN point_material m ON p.id = m.point_id
-    WHERE m.${column} IS NOT NULL
+    WHERE m.${column} IS NOT NULL ${idFilter}
     ORDER BY p.id
   `,
     )
-    .all() as Array<{ id: number; city: string; district: string; rel_path: string }>;
+    .all(...params) as Array<{ id: number; city: string; district: string; rel_path: string }>;
 
   if (rows.length === 0) {
     res.status(404).json({ success: false, error: '没有可下载的素材' });
@@ -181,8 +220,9 @@ router.get('/batch-download', ticketMiddleware, (req, res) => {
   }
 
   // 打印统计摘要
+  const scopeLabel = ids ? `指定 ${ids.length} 个点位` : '全部点位';
   console.log(
-    `[batch-download] ${type} 统计: 成功 ${addedCount} 个, 跳过 ${skippedCount} 个 (共 ${rows.length} 条记录)`,
+    `[batch-download] ${type} 统计 (${scopeLabel}): 成功 ${addedCount} 个, 跳过 ${skippedCount} 个 (共 ${rows.length} 条记录)`,
   );
 
   // ── 如果所有文件都无效 ──
