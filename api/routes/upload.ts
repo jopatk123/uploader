@@ -13,8 +13,6 @@ const router = Router();
 
 // 分片大小：默认 5MB
 const CHUNK_SIZE = parseInt(process.env.CHUNK_SIZE || '5', 10) * 1024 * 1024;
-// 图片单文件上限：20MB
-const IMAGE_MAX_SIZE = 20 * 1024 * 1024;
 // 视频单文件上限：100MB
 const VIDEO_MAX_SIZE = 100 * 1024 * 1024;
 
@@ -301,13 +299,13 @@ router.post('/complete', async (req, res) => {
     });
 
     // ── 步骤2：大小校验（在 rename 前，避免污染最终目录） ──
-    const maxSize = isImageType(type) ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
-    if (totalSize > maxSize) {
+    // 图片不限大小（前端已对超过10MB的图片进行压缩），仅校验视频
+    if (!isImageType(type) && totalSize > VIDEO_MAX_SIZE) {
       safeUnlink(tmpFilePath);
       await fse.remove(chunkDir);
       res.status(400).json({
         success: false,
-        error: `文件大小超过限制（${(maxSize / 1024 / 1024).toFixed(0)}MB）`,
+        error: `文件大小超过限制（${(VIDEO_MAX_SIZE / 1024 / 1024).toFixed(0)}MB）`,
       });
       return;
     }

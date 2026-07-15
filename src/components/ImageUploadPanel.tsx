@@ -1,12 +1,13 @@
 /**
  * 图片上传面板
- * 支持 jpg/png/webp，单张上限20MB
- * EXIF 保护策略：原图直接上传，完整保留 GPS/拍摄时间等元数据，不做压缩。
+ * 支持 jpg/png/webp，不限大小
+ * 超过 10MB 的图片在前端自动压缩到 10MB 以内，尽量保留 EXIF 元数据。
  * 通过 type 区分主图（img）与备选图（img_alt）。
  */
 import { useState, useRef } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
+import { compressImageIfNeeded, shouldCompress } from '@/lib/imageCompress';
 
 interface Props {
   pointId: number | null;
@@ -17,7 +18,6 @@ interface Props {
   type?: 'img' | 'img_alt';
 }
 
-const IMAGE_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
 
 export default function ImageUploadPanel({
@@ -53,12 +53,6 @@ export default function ImageUploadPanel({
       return;
     }
 
-    // 校验大小
-    if (selected.size > IMAGE_MAX_SIZE) {
-      setError(`图片大小超过20MB限制（当前 ${(selected.size / 1024 / 1024).toFixed(1)}MB）`);
-      return;
-    }
-
     setFile(selected);
 
     // 如果点位已有图片，弹窗确认覆盖
@@ -76,13 +70,23 @@ export default function ImageUploadPanel({
       setSuccess(false);
       setError(null);
 
-      // EXIF 保护：原图直接上传，不做任何压缩，完整保留 GPS/拍摄时间等元数据
-      const fileId = generateFileId(originalFile);
+      // 超过 10MB 的图片先压缩，尽量保留 EXIF 元数据
+      let fileToUpload = originalFile;
+      if (shouldCompress(originalFile)) {
+        setUploadProgress({
+          phase: 'compressing',
+          percent: 0,
+          message: '正在压缩图片（保留EXIF）...',
+        });
+      }
+      fileToUpload = await compressImageIfNeeded(originalFile);
+
+      const fileId = generateFileId(fileToUpload);
 
       // 分片上传（type 区分主图/备选图）
       await uploadFile(
-        originalFile,
-        originalFile.name,
+        fileToUpload,
+        fileToUpload.name,
         pointId,
         type,
         fileId,
@@ -104,7 +108,7 @@ export default function ImageUploadPanel({
     }
   };
 
-  const isUploading = uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
+  const isUploading = uploadProgress?.phase === 'compressing' || uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
 
   const title = isAlt ? '备选图片上传' : '图片上传';
   const accentColor = isAlt ? 'bg-status-yellow' : 'bg-accent';
@@ -125,7 +129,7 @@ export default function ImageUploadPanel({
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: JPG / PNG / WEBP · 上限: 20MB · 完整保留 EXIF
+        格式: JPG / PNG / WEBP
       </div>
 
       <input
@@ -167,6 +171,7 @@ export default function ImageUploadPanel({
           <ProgressBar
             percent={uploadProgress.percent}
             label={uploadProgress.message}
+            variant={uploadProgress.phase === 'compressing' ? 'compress' : 'default'}
           />
         </div>
       )}

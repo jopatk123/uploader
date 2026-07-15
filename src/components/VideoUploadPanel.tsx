@@ -122,7 +122,7 @@ export default function VideoUploadPanel({
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: MP4 · 上限: 100MB · 不做压缩
+        格式: MP4 · 上限: 100MB
       </div>
 
       <input
