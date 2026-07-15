@@ -61,6 +61,14 @@ export default function UploadPage() {
               <h1 className="font-mono text-base text-base-100">无人机点位素材上传系统</h1>
               <p className="text-xs text-base-400">福州沿海测绘点位 · {points.length}个点位</p>
             </div>
+            <a
+              href="https://docs.qq.com/sheet/DRGVqV01aR2xyRkJW?tab=BB08J2"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-4 text-xs text-white bg-accent hover:bg-accent/80 transition-colors font-mono px-4 py-2 rounded font-semibold shadow-lg shadow-accent/20"
+            >
+              打开在线表格查看点位序号
+            </a>
           </div>
           <a
             href="/admin"
