@@ -1,11 +1,13 @@
 /**
  * 视频上传面板
  * 仅 mp4，≥100MB直接拦截并弹窗指引，不做任何压缩，分片上传
+ * 视频时长必须 ≥ 10 秒，低于 10 秒不允许上传
  * 通过 type 区分主视频（video）与备选视频（video_alt）。
  */
 import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
+import { checkVideoDuration, MIN_VIDEO_DURATION } from '@/lib/videoCheck';
 
 interface Props {
   pointId: number | null;
@@ -48,7 +50,7 @@ export default function VideoUploadPanel({
 
   const disabled = pointId === null;
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
 
@@ -66,6 +68,20 @@ export default function VideoUploadPanel({
     // 校验大小：≥100MB直接拦截
     if (selected.size >= VIDEO_MAX_SIZE) {
       onOverLimit();
+      return;
+    }
+
+    // 校验视频时长：必须 ≥ 10 秒
+    try {
+      const { ok, duration } = await checkVideoDuration(selected);
+      if (!ok) {
+        setError(
+          `视频时长必须 ≥ ${MIN_VIDEO_DURATION} 秒才能上传，当前时长 ${duration.toFixed(1)} 秒`
+        );
+        return;
+      }
+    } catch {
+      setError('无法读取视频时长，文件可能已损坏，请更换视频重试');
       return;
     }
 
@@ -131,7 +147,7 @@ export default function VideoUploadPanel({
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: MP4 · 上限: 100MB
+        格式: MP4 · 上限: 100MB · 时长 ≥ 10秒
       </div>
 
       <input
@@ -162,7 +178,7 @@ export default function VideoUploadPanel({
         ) : (
           <div className="text-base-300">
             <p className="text-sm">点击选择{isAlt ? '备选' : ''}视频</p>
-            <p className="text-xs text-base-400 mt-1">MP4 · 最大 100MB</p>
+            <p className="text-xs text-base-400 mt-1">MP4 · 最大 100MB · ≥ 10秒</p>
           </div>
         )}
       </label>

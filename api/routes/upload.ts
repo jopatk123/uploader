@@ -9,6 +9,7 @@ import fs from 'fs';
 import fse from 'fs-extra';
 import { db, STORAGE_DIR, TEMP_CHUNK_DIR } from '../db.js';
 import { getImageDimension, isPanoramicDimension } from '../utils/imageDimension.js';
+import { getVideoDuration, isDurationValid, MIN_VIDEO_DURATION } from '../utils/videoDuration.js';
 
 const router = Router();
 
@@ -331,6 +332,30 @@ router.post('/complete', async (req, res) => {
         res.status(400).json({
           success: false,
           error: `必须是全景图（像素比 2:1）才能上传，当前尺寸 ${dim.width}×${dim.height}（${ratio}:1）`,
+        });
+        return;
+      }
+    }
+
+    // ── 步骤2.6：视频时长校验（防御性，前端已校验） ──
+    // 要求时长 ≥ 10 秒，低于 10 秒拒绝入库，避免脏数据落盘
+    if (!isImageType(type)) {
+      const duration = getVideoDuration(tmpFilePath);
+      if (duration === null) {
+        safeUnlink(tmpFilePath);
+        await fse.remove(chunkDir);
+        res.status(400).json({
+          success: false,
+          error: '无法解析视频时长，文件可能已损坏或不是有效的 MP4 文件',
+        });
+        return;
+      }
+      if (!isDurationValid(duration)) {
+        safeUnlink(tmpFilePath);
+        await fse.remove(chunkDir);
+        res.status(400).json({
+          success: false,
+          error: `视频时长必须 ≥ ${MIN_VIDEO_DURATION} 秒才能上传，当前时长 ${duration.toFixed(1)} 秒`,
         });
         return;
       }

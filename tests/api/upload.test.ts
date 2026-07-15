@@ -7,7 +7,7 @@ import request from 'supertest';
 import app from '../../api/app.js';
 import fs from 'fs';
 import path from 'path';
-import { makePanoramicPng, makeNonPanoramicPng } from '../helpers.js';
+import { makePanoramicPng, makeNonPanoramicPng, makeValidMp4, makeShortMp4 } from '../helpers.js';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
 let token: string;
@@ -446,12 +446,14 @@ describe('上传流程 - 多分片视频合并', () => {
   it('上传3个分片并合并成视频文件', async () => {
     const fileId = `fid-multi-${Date.now()}`;
     const pointId = '7';
-    const chunkSize = 100;
-    const totalSize = chunkSize * 3;
+    const mp4Buf = makeValidMp4(15); // 15 秒合法视频
+    const chunkSize = Math.ceil(mp4Buf.length / 3);
 
     // 上传3个分片
     for (let i = 0; i < 3; i++) {
-      const buf = Buffer.alloc(chunkSize, i + 1);
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, mp4Buf.length);
+      const buf = mp4Buf.subarray(start, end);
       await request(app)
         .post('/api/upload/chunk')
         .field('fileId', fileId)
@@ -469,17 +471,93 @@ describe('上传流程 - 多分片视频合并', () => {
       .send({ fileId, pointId, type: 'video', fileName: 'multi.mp4', totalChunks: '3' });
 
     expect(mergeRes.status).toBe(200);
-    expect(mergeRes.body.data.size).toBe(totalSize);
+    expect(mergeRes.body.success).toBe(true);
+    expect(mergeRes.body.data.size).toBe(mp4Buf.length);
 
-    // 校验文件内容：分片按顺序拼接
+    // 校验文件内容：分片按顺序拼接后与原始 buffer 完全一致
     const DATA_DIR = process.env.DATA_DIR!;
     const fullPath = path.join(DATA_DIR, 'storage', mergeRes.body.data.path);
     const fileBuf = fs.readFileSync(fullPath);
-    expect(fileBuf.length).toBe(totalSize);
-    for (let i = 0; i < 3; i++) {
-      const slice = fileBuf.subarray(i * chunkSize, (i + 1) * chunkSize);
-      const expected = Buffer.alloc(chunkSize, i + 1);
-      expect(slice.equals(expected)).toBe(true);
-    }
+    expect(fileBuf.length).toBe(mp4Buf.length);
+    expect(fileBuf.equals(mp4Buf)).toBe(true);
+  });
+
+  it('短视频（< 10秒）被拒绝', async () => {
+    const pointId = '11';
+    const fileId = `fid-short-${Date.now()}`;
+    const buf = makeShortMp4(5); // 5 秒短视频
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'video')
+      .field('fileName', 'short.mp4')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'video', fileName: 'short.mp4', totalChunks: '1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('10 秒');
+    expect(res.body.error).toContain('5.0 秒');
+
+    // 验证数据库未写入
+    const detailRes = await request(app)
+      .get(`/api/admin/point/${pointId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(detailRes.body.data.has_video).toBe(false);
+  });
+
+  it('无法解析的视频文件被拒绝', async () => {
+    const pointId = '12';
+    const fileId = `fid-corrupt-mp4-${Date.now()}`;
+    const buf = makeFakeImageBuffer(1024); // 非 MP4 数据
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'video')
+      .field('fileName', 'corrupt.mp4')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'video', fileName: 'corrupt.mp4', totalChunks: '1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('无法解析');
+  });
+
+  it('备选视频（video_alt）同样校验时长', async () => {
+    const pointId = '13';
+    const fileId = `fid-alt-video-${Date.now()}`;
+    const buf = makeValidMp4(20); // 20 秒合法视频
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'video_alt')
+      .field('fileName', 'alt.mp4')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'video_alt', fileName: 'alt.mp4', totalChunks: '1' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.type).toBe('video_alt');
   });
 });
