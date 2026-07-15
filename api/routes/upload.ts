@@ -8,6 +8,7 @@ import path from 'path';
 import fs from 'fs';
 import fse from 'fs-extra';
 import { db, STORAGE_DIR, TEMP_CHUNK_DIR } from '../db.js';
+import { getImageDimension, isPanoramicDimension } from '../utils/imageDimension.js';
 
 const router = Router();
 
@@ -308,6 +309,31 @@ router.post('/complete', async (req, res) => {
         error: `文件大小超过限制（${(VIDEO_MAX_SIZE / 1024 / 1024).toFixed(0)}MB）`,
       });
       return;
+    }
+
+    // ── 步骤2.5：图片全景图比例校验（防御性，前端已校验） ──
+    // 要求像素比 2:1，非全景图拒绝入库，避免脏数据落盘
+    if (isImageType(type)) {
+      const dim = getImageDimension(tmpFilePath);
+      if (!dim) {
+        safeUnlink(tmpFilePath);
+        await fse.remove(chunkDir);
+        res.status(400).json({
+          success: false,
+          error: '无法解析图片尺寸，文件可能已损坏或格式不正确',
+        });
+        return;
+      }
+      if (!isPanoramicDimension(dim)) {
+        safeUnlink(tmpFilePath);
+        await fse.remove(chunkDir);
+        const ratio = (dim.width / dim.height).toFixed(2);
+        res.status(400).json({
+          success: false,
+          error: `必须是全景图（像素比 2:1）才能上传，当前尺寸 ${dim.width}×${dim.height}（${ratio}:1）`,
+        });
+        return;
+      }
     }
 
     // ── 步骤3：原子 rename 临时文件到最终路径 ──

@@ -1,17 +1,18 @@
 /**
  * 分片上传接口端到端测试
- * 覆盖：分片上传、断点续传检查、合并、后缀/大小校验
+ * 覆盖：分片上传、断点续传检查、合并、后缀/大小校验、全景图比例校验
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import app from '../../api/app.js';
 import fs from 'fs';
 import path from 'path';
+import { makePanoramicPng, makeNonPanoramicPng } from '../helpers.js';
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
 let token: string;
 
-// 测试用：构造一个 1KB 的 "图片" buffer（仅测试分片流程，不测真实图片压缩）
+// 测试用：构造一个假 buffer（仅测试分片上传流程，不经过合并的图片校验）
 function makeFakeImageBuffer(size: number): Buffer {
   return Buffer.alloc(size, 0xff);
 }
@@ -120,7 +121,7 @@ describe('上传流程 - 合并接口', () => {
 
   it('上传并合并图片素材，校验数据库与文件', async () => {
     const fileId = `fid-merge-${Date.now()}`;
-    const buf = makeFakeImageBuffer(2048);
+    const buf = makePanoramicPng(100); // 200×100 合法全景图 PNG
 
     // 上传1个分片
     await request(app)
@@ -130,20 +131,20 @@ describe('上传流程 - 合并接口', () => {
       .field('totalChunks', '1')
       .field('pointId', '3')
       .field('type', 'img')
-      .field('fileName', 'pic.jpg')
+      .field('fileName', 'pic.png')
       .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
 
     // 合并
     const mergeRes = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId: '3', type: 'img', fileName: 'pic.jpg', totalChunks: '1' });
+      .send({ fileId, pointId: '3', type: 'img', fileName: 'pic.png', totalChunks: '1' });
 
     expect(mergeRes.status).toBe(200);
     expect(mergeRes.body.success).toBe(true);
     expect(mergeRes.body.data.pointId).toBe(3);
     expect(mergeRes.body.data.type).toBe('img');
     expect(mergeRes.body.data.path).toContain('point_3');
-    expect(mergeRes.body.data.path).toMatch(/\.jpg$/);
+    expect(mergeRes.body.data.path).toMatch(/\.png$/);
 
     // 通过管理员接口校验数据
     const detailRes = await request(app)
@@ -241,7 +242,7 @@ describe('上传流程 - 合并接口', () => {
   it('覆盖上传时旧文件被删除', async () => {
     const pointId = '4';
     const fileId1 = `fid-overwrite-1-${Date.now()}`;
-    const buf = makeFakeImageBuffer(512);
+    const buf = makePanoramicPng(50); // 100×50 合法全景图
 
     // 第一次上传
     await request(app)
@@ -251,12 +252,12 @@ describe('上传流程 - 合并接口', () => {
       .field('totalChunks', '1')
       .field('pointId', pointId)
       .field('type', 'img')
-      .field('fileName', 'a.jpg')
+      .field('fileName', 'a.png')
       .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
 
     const merge1 = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: fileId1, pointId, type: 'img', fileName: 'a.jpg', totalChunks: '1' });
+      .send({ fileId: fileId1, pointId, type: 'img', fileName: 'a.png', totalChunks: '1' });
     const firstPath = merge1.body.data.path;
 
     // 第二次上传（覆盖）
@@ -268,12 +269,12 @@ describe('上传流程 - 合并接口', () => {
       .field('totalChunks', '1')
       .field('pointId', pointId)
       .field('type', 'img')
-      .field('fileName', 'b.jpg')
+      .field('fileName', 'b.png')
       .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
 
     const merge2 = await request(app)
       .post('/api/upload/complete')
-      .send({ fileId: fileId2, pointId, type: 'img', fileName: 'b.jpg', totalChunks: '1' });
+      .send({ fileId: fileId2, pointId, type: 'img', fileName: 'b.png', totalChunks: '1' });
 
     expect(merge2.body.success).toBe(true);
     expect(merge2.body.data.path).not.toBe(firstPath);
@@ -291,7 +292,7 @@ describe('上传流程 - 合并接口', () => {
   it('上传完成后可通过 /admin/download 下载', async () => {
     const pointId = '5';
     const fileId = `fid-download-${Date.now()}`;
-    const buf = makeFakeImageBuffer(1024);
+    const buf = makePanoramicPng(80); // 160×80 合法全景图
 
     await request(app)
       .post('/api/upload/chunk')
@@ -300,12 +301,12 @@ describe('上传流程 - 合并接口', () => {
       .field('totalChunks', '1')
       .field('pointId', pointId)
       .field('type', 'img')
-      .field('fileName', 'dl.jpg')
+      .field('fileName', 'dl.png')
       .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
 
     await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId, type: 'img', fileName: 'dl.jpg', totalChunks: '1' });
+      .send({ fileId, pointId, type: 'img', fileName: 'dl.png', totalChunks: '1' });
 
     const dlRes = await request(app)
       .get('/api/admin/download/5?type=img')
@@ -319,7 +320,7 @@ describe('上传流程 - 合并接口', () => {
   it('上传完成后可通过 DELETE /admin/material 删除', async () => {
     const pointId = '6';
     const fileId = `fid-delete-${Date.now()}`;
-    const buf = makeFakeImageBuffer(512);
+    const buf = makePanoramicPng(60); // 120×60 合法全景图
 
     await request(app)
       .post('/api/upload/chunk')
@@ -328,12 +329,12 @@ describe('上传流程 - 合并接口', () => {
       .field('totalChunks', '1')
       .field('pointId', pointId)
       .field('type', 'img')
-      .field('fileName', 'del.jpg')
+      .field('fileName', 'del.png')
       .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
 
     await request(app)
       .post('/api/upload/complete')
-      .send({ fileId, pointId, type: 'img', fileName: 'del.jpg', totalChunks: '1' });
+      .send({ fileId, pointId, type: 'img', fileName: 'del.png', totalChunks: '1' });
 
     // 删除
     const delRes = await request(app)
@@ -352,6 +353,85 @@ describe('上传流程 - 合并接口', () => {
     expect(detailRes.body.data.img_path).toBeNull();
     // 删除最后一个素材后 upload_time 应被清空
     expect(detailRes.body.data.upload_time).toBeNull();
+  });
+
+  it('非全景图图片（1:1）被拒绝', async () => {
+    const pointId = '8';
+    const fileId = `fid-non-pano-${Date.now()}`;
+    const buf = makeNonPanoramicPng(100); // 100×100 非全景图
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'img')
+      .field('fileName', 'square.png')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'img', fileName: 'square.png', totalChunks: '1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('全景图');
+    expect(res.body.error).toContain('2:1');
+
+    // 验证文件未落盘、数据库未写入
+    const detailRes = await request(app)
+      .get(`/api/admin/point/${pointId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(detailRes.body.data.has_image).toBe(false);
+  });
+
+  it('无法解析的图片文件被拒绝', async () => {
+    const pointId = '9';
+    const fileId = `fid-corrupt-${Date.now()}`;
+    const buf = makeFakeImageBuffer(1024); // 非 PNG/JPEG 数据
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'img')
+      .field('fileName', 'corrupt.png')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'img', fileName: 'corrupt.png', totalChunks: '1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('无法解析');
+  });
+
+  it('备选图（img_alt）同样校验全景图比例', async () => {
+    const pointId = '10';
+    const fileId = `fid-alt-pano-${Date.now()}`;
+    const buf = makePanoramicPng(120); // 240×120 合法全景图
+
+    await request(app)
+      .post('/api/upload/chunk')
+      .field('fileId', fileId)
+      .field('index', '0')
+      .field('totalChunks', '1')
+      .field('pointId', pointId)
+      .field('type', 'img_alt')
+      .field('fileName', 'alt.png')
+      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
+
+    const res = await request(app)
+      .post('/api/upload/complete')
+      .send({ fileId, pointId, type: 'img_alt', fileName: 'alt.png', totalChunks: '1' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.type).toBe('img_alt');
   });
 });
 

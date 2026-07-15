@@ -1,6 +1,6 @@
 /**
  * 图片上传面板
- * 支持 jpg/png/webp，不限大小
+ * 支持 jpg/png/webp，不限大小，必须为全景图（像素比 2:1）
  * 超过 10MB 的图片在前端自动压缩到 10MB 以内，尽量保留 EXIF 元数据。
  * 通过 type 区分主图（img）与备选图（img_alt）。
  */
@@ -8,6 +8,7 @@ import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 import { compressImageIfNeeded, shouldCompress } from '@/lib/imageCompress';
+import { checkPanoramic } from '@/lib/imageCheck';
 
 interface Props {
   pointId: number | null;
@@ -47,7 +48,7 @@ export default function ImageUploadPanel({
 
   const disabled = pointId === null;
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
 
@@ -59,6 +60,20 @@ export default function ImageUploadPanel({
     const ext = selected.name.substring(selected.name.lastIndexOf('.')).toLowerCase();
     if (!ALLOWED_EXTS.includes(ext)) {
       setError(`不支持的图片格式，仅支持 ${ALLOWED_EXTS.join(', ')}`);
+      return;
+    }
+
+    // 校验全景图比例（像素比 2:1）
+    try {
+      const { ok, width, height } = await checkPanoramic(selected);
+      if (!ok) {
+        setError(
+          `必须是全景图（像素比 2:1）才能上传，当前图片尺寸为 ${width}×${height}（${(width / height).toFixed(2)}:1）`
+        );
+        return;
+      }
+    } catch {
+      setError('无法读取图片尺寸，文件可能已损坏，请更换图片重试');
       return;
     }
 
@@ -138,7 +153,7 @@ export default function ImageUploadPanel({
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: JPG / PNG / WEBP
+        格式: JPG / PNG / WEBP · 必须为全景图（2:1）
       </div>
 
       <input
@@ -169,7 +184,7 @@ export default function ImageUploadPanel({
         ) : (
           <div className="text-base-300">
             <p className="text-sm">点击选择{isAlt ? '备选' : ''}图片</p>
-            <p className="text-xs text-base-400 mt-1">JPG / PNG / WEBP</p>
+            <p className="text-xs text-base-400 mt-1">JPG / PNG / WEBP · 全景图 2:1</p>
           </div>
         )}
       </label>
