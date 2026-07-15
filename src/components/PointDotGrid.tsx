@@ -1,10 +1,11 @@
 /**
  * 点位状态点阵组件
- * 140个圆点，绿色=图片+视频全部完成，红色=未全部完成
+ * 140个圆点：绿色=主图+主视频全部完成，黄色=仅上传其一，红色=均未上传
  * 点阵上方增加按区域（区县）分组的统计，一眼看出各区域完成进度
  */
 import { useState, useMemo } from 'react';
 import type { PointStatus } from '@/types';
+import { getPointState, type PointState } from '@/lib/utils';
 
 interface Props {
   points: PointStatus[];
@@ -16,12 +17,26 @@ interface RegionStat {
   name: string;
   total: number;
   completed: number;
+  partial: number;
 }
+
+// 状态 → 圆点背景色 / 光晕颜色
+const STATE_BG: Record<PointState, string> = {
+  complete: 'bg-status-green',
+  partial: 'bg-status-yellow',
+  empty: 'bg-status-red',
+};
+const STATE_GLOW: Record<PointState, string> = {
+  complete: '0 0 6px #22c55e88',
+  partial: '0 0 6px #f59e0b88',
+  empty: '0 0 6px #ef444488',
+};
 
 export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const completedCount = points.filter(p => p.has_image && p.has_video).length;
+  const partialCount = points.filter(p => getPointState(p.has_image, p.has_video) === 'partial').length;
 
   // 按区县分组统计
   const regionStats = useMemo<RegionStat[]>(() => {
@@ -29,11 +44,13 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
     for (const p of points) {
       let stat = map.get(p.district);
       if (!stat) {
-        stat = { name: p.district, total: 0, completed: 0 };
+        stat = { name: p.district, total: 0, completed: 0, partial: 0 };
         map.set(p.district, stat);
       }
       stat.total++;
-      if (p.has_image && p.has_video) stat.completed++;
+      const state = getPointState(p.has_image, p.has_video);
+      if (state === 'complete') stat.completed++;
+      else if (state === 'partial') stat.partial++;
     }
     // 按总数降序排列
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
@@ -44,7 +61,9 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-mono text-sm text-base-200">
           点位状态总览
-          <span className="ml-2 text-base-400">({completedCount}/{points.length} 完成)</span>
+          <span className="ml-2 text-base-400">
+            (完成 {completedCount} · 部分 {partialCount} · 共 {points.length})
+          </span>
         </h3>
         <div className="flex items-center gap-4 text-xs text-base-300">
           <span className="flex items-center gap-1.5">
@@ -52,8 +71,12 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
             全部完成
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-status-yellow"></span>
+            部分完成
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-status-red"></span>
-            未完成
+            未开始
           </span>
         </div>
       </div>
@@ -63,6 +86,8 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
         {regionStats.map(r => {
           const percent = r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0;
           const isAllDone = r.completed === r.total;
+          // 区域整体状态：全部完成→绿；存在部分完成→黄；否则→青
+          const barColor = isAllDone ? 'bg-status-green' : r.partial > 0 ? 'bg-status-yellow' : 'bg-accent';
           return (
             <div
               key={r.name}
@@ -76,12 +101,14 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
               </div>
               <div className="h-1.5 bg-base-900 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${isAllDone ? 'bg-status-green' : 'bg-accent'}`}
+                  className={`h-full rounded-full transition-all ${barColor}`}
                   style={{ width: `${percent}%` }}
                 />
               </div>
               <div className="mt-1 text-[10px] text-base-400 font-mono">
-                {isAllDone ? '已完成' : `缺 ${r.total - r.completed} 个`}
+                {isAllDone
+                  ? '已完成'
+                  : `缺 ${r.total - r.completed} 个${r.partial > 0 ? ` · 部分 ${r.partial}` : ''}`}
               </div>
             </div>
           );
@@ -90,7 +117,7 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
 
       <div className="grid grid-cols-28 gap-1.5" style={{ gridTemplateColumns: 'repeat(28, 1fr)' }}>
         {points.map(p => {
-          const isComplete = p.has_image && p.has_video;
+          const state = getPointState(p.has_image, p.has_video);
           const isSelected = p.id === selectedId;
           const isHovered = p.id === hoveredId;
 
@@ -105,12 +132,12 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
               <div
                 className={`
                   w-full aspect-square rounded-full transition-all duration-150
-                  ${isComplete ? 'bg-status-green' : 'bg-status-red'}
+                  ${STATE_BG[state]}
                   ${isSelected ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-700 scale-110' : ''}
                   ${isHovered ? 'scale-125' : ''}
                   hover:shadow-lg
                 `}
-                style={isComplete ? { boxShadow: '0 0 6px #22c55e88' } : { boxShadow: '0 0 6px #ef444488' }}
+                style={{ boxShadow: STATE_GLOW[state] }}
               />
               <span className="absolute inset-0 flex items-center justify-center text-[8px] font-mono text-base-900 font-bold pointer-events-none">
                 {p.id}
