@@ -7,7 +7,7 @@
 - **作业上传页（/）**：无密码公开访问，选择点位后上传图片/视频
 - **管理后台（/admin）**：密码校验进入，查看/下载/删除素材
 - 图片必须为全景图（像素比 2:1），前端 + 后端双重校验；超 10MB 自动压缩并保留 EXIF
-- 视频时长必须 ≥ 10 秒，仅 MP4，上限 100MB，分片上传 + 断点续传
+- 视频时长必须 ≥ 10 秒，仅 MP4，上限 100MB，分片上传
 - SQLite 嵌入式数据库，Docker 一键部署
 
 ## 技术栈
@@ -18,7 +18,7 @@
 | 后端 | Node.js 22 + Express 4 + better-sqlite3 |
 | 数据库 | SQLite（WAL 模式） |
 | 鉴权 | JWT（管理后台） |
-| 文件上传 | multer（memoryStorage） + 分片 + 断点续传 |
+| 文件上传 | multer（memoryStorage） + 分片上传 |
 | 部署 | Docker + docker-compose |
 
 ## 本地开发

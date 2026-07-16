@@ -1,6 +1,6 @@
 /**
  * 分片上传接口（公开免鉴权）
- * 支持断点续传、分片合并、文件后缀/大小二次校验
+ * 支持分片合并、文件后缀/大小二次校验
  */
 import { Router } from 'express';
 import multer from 'multer';
@@ -141,33 +141,6 @@ router.post('/chunk', upload.single('chunk'), (req, res) => {
     success: true,
     data: { fileId, index: Number(index), totalChunks: Number(totalChunks) },
   });
-});
-
-/**
- * GET /api/upload/check?fileId=xxx
- * 断点续传校验：返回已上传的分片索引列表
- */
-router.get('/check', (req, res) => {
-  const { fileId } = req.query;
-  if (!fileId || typeof fileId !== 'string' || !isValidFileId(fileId)) {
-    res.status(400).json({ success: false, error: 'fileId 参数非法' });
-    return;
-  }
-
-  const chunkDir = path.join(TEMP_CHUNK_DIR, fileId);
-  const uploadedIndices: number[] = [];
-
-  if (fs.existsSync(chunkDir)) {
-    const files = fs.readdirSync(chunkDir);
-    for (const f of files) {
-      const match = f.match(/^chunk-(\d+)$/);
-      if (match) {
-        uploadedIndices.push(parseInt(match[1]));
-      }
-    }
-  }
-
-  res.json({ success: true, data: { fileId, uploadedIndices } });
 });
 
 /**

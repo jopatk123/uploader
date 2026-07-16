@@ -1,6 +1,6 @@
 /**
  * 分片上传工具
- * 支持分片切分、断点续传、进度回调
+ * 支持分片切分、进度回调
  */
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB 分片
@@ -20,18 +20,6 @@ export interface UploadProgress {
 export function generateFileId(file: File): string {
   const ext = file.name.substring(file.name.lastIndexOf('.'));
   return `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
-}
-
-/**
- * 检查已上传的分片（断点续传）
- */
-export async function checkUploadedChunks(fileId: string): Promise<number[]> {
-  const res = await fetch(`/api/upload/check?fileId=${encodeURIComponent(fileId)}`);
-  const json = await res.json();
-  if (json.success && json.data) {
-    return json.data.uploadedIndices || [];
-  }
-  return [];
 }
 
 /**
@@ -89,7 +77,7 @@ async function completeUpload(
 }
 
 /**
- * 执行分片上传（支持断点续传）
+ * 执行分片上传
  */
 export async function uploadFile(
   file: Blob,
@@ -102,21 +90,8 @@ export async function uploadFile(
   const fileSize = file.size;
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
 
-  onProgress({ phase: 'uploading', percent: 0, message: '正在检查断点...' });
-
-  // 检查已上传分片（断点续传）
-  const uploadedIndices = await checkUploadedChunks(fileId);
-  const uploadedSet = new Set(uploadedIndices);
-
-  // 上传未完成的分片
+  // 逐片上传
   for (let i = 0; i < totalChunks; i++) {
-    if (uploadedSet.has(i)) {
-      // 已上传，跳过
-      const percent = Math.round(((i + 1) / totalChunks) * 100);
-      onProgress({ phase: 'uploading', percent, message: `分片 ${i + 1}/${totalChunks}（已传）` });
-      continue;
-    }
-
     const start = i * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, fileSize);
     const chunk = file.slice(start, end);

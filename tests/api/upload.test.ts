@@ -1,6 +1,6 @@
 /**
  * 分片上传接口端到端测试
- * 覆盖：分片上传、断点续传检查、合并、后缀/大小校验、全景图比例校验
+ * 覆盖：分片上传、合并、后缀/大小校验、全景图比例校验
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
@@ -65,49 +65,9 @@ describe('上传流程 - 分片接口', () => {
     expect(res.body.data.index).toBe(0);
   });
 
-  it('GET /check 返回已上传分片列表', async () => {
-    // 先上传2个分片
-    const buf = makeFakeImageBuffer(100);
-    await request(app)
-      .post('/api/upload/chunk')
-      .field('fileId', 'fid-check')
-      .field('index', '0')
-      .field('totalChunks', '3')
-      .field('pointId', '2')
-      .field('type', 'img')
-      .field('fileName', 't.jpg')
-      .attach('chunk', buf, { filename: 'c0', contentType: 'application/octet-stream' });
-
-    await request(app)
-      .post('/api/upload/chunk')
-      .field('fileId', 'fid-check')
-      .field('index', '2')
-      .field('totalChunks', '3')
-      .field('pointId', '2')
-      .field('type', 'img')
-      .field('fileName', 't.jpg')
-      .attach('chunk', buf, { filename: 'c2', contentType: 'application/octet-stream' });
-
-    // 查询已上传分片
-    const res = await request(app).get('/api/upload/check?fileId=fid-check');
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.fileId).toBe('fid-check');
-    expect(res.body.data.uploadedIndices).toContain(0);
-    expect(res.body.data.uploadedIndices).toContain(2);
-    expect(res.body.data.uploadedIndices).not.toContain(1);
-  });
-
-  it('GET /check 缺少 fileId 返回 400', async () => {
-    const res = await request(app).get('/api/upload/check');
-    expect(res.status).toBe(400);
-  });
-
-  it('GET /check 不存在的 fileId 返回空列表', async () => {
-    const res = await request(app).get('/api/upload/check?fileId=not-exist');
-    expect(res.status).toBe(200);
-    expect(res.body.data.uploadedIndices).toEqual([]);
+  it('GET /check 已移除，返回 404', async () => {
+    const res = await request(app).get('/api/upload/check?fileId=any');
+    expect(res.status).toBe(404);
   });
 });
 

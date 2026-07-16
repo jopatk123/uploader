@@ -67,17 +67,6 @@ async function uploadChunk(chunk, index, totalChunks, fileId, pointId, type, fil
 }
 
 /**
- * 检查已上传分片（断点续传）
- */
-async function checkChunks(fileId) {
-  const r = await req(`${API}/api/upload/check?fileId=${encodeURIComponent(fileId)}`);
-  if (r.status !== 200 || !r.json.success) {
-    fail(`check 失败: ${JSON.stringify(r.json)}`);
-  }
-  return r.json.data.uploadedIndices;
-}
-
-/**
  * 合并文件
  */
 async function completeUpload(fileId, pointId, type, fileName) {
@@ -167,14 +156,7 @@ async function testUploadFile(filePath, pointId, type) {
     log(`  分片 ${i + 1}/${totalChunks} 上传完成`);
   }
 
-  // 2. 检查已上传分片
-  const uploaded = await checkChunks(fileId);
-  log(`  断点续传检查: 已上传 ${uploaded.length}/${totalChunks} 分片`);
-  if (uploaded.length !== totalChunks) {
-    fail(`分片数量不匹配，期望 ${totalChunks}，实际 ${uploaded.length}`);
-  }
-
-  // 3. 合并
+  // 2. 合并
   const mergeRes = await completeUpload(fileId, pointId, type, fileName);
   log(`  合并成功: ${mergeRes.path}, size=${mergeRes.size}`);
   if (mergeRes.size !== totalSize) {
@@ -305,39 +287,6 @@ async function main() {
   const delVideoRes = await deleteMaterial(token, POINT_ID_VIDEO, 'video');
   if (delVideoRes.status !== 200) fail(`删除视频失败: ${JSON.stringify(delVideoRes.json)}`);
   log('  视频已删除');
-
-  // ============ 测试断点续传 ============
-  log('\n----- 断点续传测试 -----');
-  const { chunks, totalChunks } = splitChunks(videoPath);
-  const resumeFileId = `test-resume-${Date.now()}`;
-  // 只上传前2个分片
-  for (let i = 0; i < 2; i++) {
-    await uploadChunk(chunks[i], i, totalChunks, resumeFileId, 13, 'video', '视频测试.mp4');
-    log(`  上传分片 ${i + 1}/${totalChunks}`);
-  }
-  // 模拟中断 - 查询已上传
-  const uploaded2 = await checkChunks(resumeFileId);
-  log(`  中断后查询已上传: ${uploaded2.length} 个分片`);
-  if (uploaded2.length !== 2) fail(`期望已上传 2 分片，实际 ${uploaded2.length}`);
-
-  // 续传剩余分片
-  for (let i = 2; i < totalChunks; i++) {
-    if (uploaded2.includes(i)) {
-      log(`  分片 ${i + 1} 已存在，跳过`);
-      continue;
-    }
-    await uploadChunk(chunks[i], i, totalChunks, resumeFileId, 13, 'video', '视频测试.mp4');
-    log(`  续传分片 ${i + 1}/${totalChunks}`);
-  }
-  // 合并
-  const resumeMerge = await completeUpload(resumeFileId, 13, 'video', '视频测试.mp4');
-  log(`  合并成功: size=${resumeMerge.size}`);
-  if (resumeMerge.size !== fs.statSync(videoPath).size) {
-    fail(`断点续传后大小不匹配`);
-  }
-  // 清理
-  await deleteMaterial(token, 13, 'video');
-  log('  断点续传测试清理完成');
 
   log('\n========== ✅ 全部测试通过 ==========');
 }
