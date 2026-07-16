@@ -17,13 +17,15 @@ export interface ImageDimension {
 
 /**
  * 从文件路径读取图片像素尺寸
- * 仅读取必要的头部字节（最多 64KB），不加载完整文件
+ * 仅读取必要的头部字节（最多 512KB），不加载完整文件
  *
  * @returns 解析成功返回 { width, height }；无法识别格式或损坏返回 null
  */
 export function getImageDimension(filePath: string): ImageDimension | null {
-  // 大多数图片头信息在前 64KB 内，JPEG 的 SOF 可能靠后（被 EXIF 等挤占）
-  const HEADER_MAX = 64 * 1024;
+  // JPEG 的 SOF 标记可能被大量 EXIF / ICC 等元数据挤到 64KB 之后
+  // （例如 browser-image-compression preserveExif 压缩后 SOF 可达 ~66KB）
+  // 512KB 足以覆盖绝大多数场景，同时仍避免读取完整大文件
+  const HEADER_MAX = 512 * 1024;
   const buf = Buffer.alloc(HEADER_MAX);
   const fd = fs.openSync(filePath, 'r');
   try {
