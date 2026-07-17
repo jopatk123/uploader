@@ -28,6 +28,20 @@ export async function fetchPoints(): Promise<PointStatus[]> {
 }
 
 /**
+ * 公开下载点位统计表格（CSV，免鉴权）
+ * 用于上传页面的公开访问场景，直接发起浏览器原生下载
+ */
+export async function downloadPublicStatsCsv(): Promise<void> {
+  const url = '/api/points/stats-csv';
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
  * 管理员登录
  */
 export async function adminLogin(password: string): Promise<string> {

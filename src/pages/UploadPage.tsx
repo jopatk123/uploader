@@ -6,7 +6,7 @@ import PointDotGrid from '@/components/PointDotGrid';
 import ImageUploadPanel from '@/components/ImageUploadPanel';
 import VideoUploadPanel from '@/components/VideoUploadPanel';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import { fetchPoints } from '@/lib/api';
+import { fetchPoints, downloadPublicStatsCsv } from '@/lib/api';
 import type { PointStatus } from '@/types';
 
 export default function UploadPage() {
@@ -15,6 +15,7 @@ export default function UploadPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string; callback: () => void } | null>(null);
   const [showOverLimit, setShowOverLimit] = useState(false);
+  const [statsDownloading, setStatsDownloading] = useState(false);
 
   const loadPoints = useCallback(async () => {
     try {
@@ -38,6 +39,15 @@ export default function UploadPage() {
       message: `点位 #${selectedId} 已有该类型素材，是否覆盖原有素材？`,
       callback,
     });
+  };
+
+  const handleDownloadStats = async () => {
+    setStatsDownloading(true);
+    try {
+      await downloadPublicStatsCsv();
+    } finally {
+      setStatsDownloading(false);
+    }
   };
 
   if (loading) {
@@ -85,6 +95,8 @@ export default function UploadPage() {
           points={points}
           selectedId={selectedId}
           onSelect={(id) => setSelectedId(id)}
+          statsDownloading={statsDownloading}
+          onDownloadStats={handleDownloadStats}
         />
 
         {/* 主操作区 */}

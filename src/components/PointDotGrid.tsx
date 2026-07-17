@@ -11,6 +11,8 @@ interface Props {
   points: PointStatus[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  statsDownloading?: boolean;
+  onDownloadStats?: () => void;
 }
 
 interface RegionStat {
@@ -32,7 +34,7 @@ const STATE_GLOW: Record<PointState, string> = {
   empty: '0 0 6px #ef444488',
 };
 
-export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
+export default function PointDotGrid({ points, selectedId, onSelect, statsDownloading, onDownloadStats }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const completedCount = points.filter(p => p.has_image && p.has_video).length;
@@ -59,12 +61,27 @@ export default function PointDotGrid({ points, selectedId, onSelect }: Props) {
   return (
     <div className="bg-base-700 border border-base-600 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-mono text-sm text-base-200">
-          点位状态总览
-          <span className="ml-2 text-base-400">
-            (完成 {completedCount} · 部分 {partialCount} · 共 {points.length})
-          </span>
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-mono text-sm text-base-200">
+            点位状态总览
+            <span className="ml-2 text-base-400">
+              (完成 {completedCount} · 部分 {partialCount} · 共 {points.length})
+            </span>
+          </h3>
+          {onDownloadStats && (
+            <button
+              onClick={onDownloadStats}
+              disabled={statsDownloading || points.length === 0}
+              title="导出全部点位统计为 CSV 表格（含区域、经纬度、各素材上传状态等）"
+              className="px-3 py-1.5 text-xs font-mono rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 bg-base-300/20 border-base-300/40 text-base-100 hover:bg-base-300/30"
+            >
+              {statsDownloading && (
+                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+              )}
+              {statsDownloading ? '生成表格中...' : '导出统计表格'}
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-4 text-xs text-base-300">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-status-green"></span>
