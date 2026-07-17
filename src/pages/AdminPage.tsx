@@ -12,6 +12,7 @@ import {
   adminFetchPointDetail,
   adminDeleteMaterial,
   adminBatchDownload,
+  adminDownloadStatsCsv,
   getToken,
   setToken,
   clearToken,
@@ -55,6 +56,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [batchDownloading, setBatchDownloading] = useState<MaterialType | null>(null);
   const [batchMsg, setBatchMsg] = useState<string | null>(null);
+  // 统计表格下载状态
+  const [statsDownloading, setStatsDownloading] = useState(false);
+  const [statsMsg, setStatsMsg] = useState<string | null>(null);
   // 选中的点位 ID 集合（用于批量下载的选择模式）
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
@@ -180,6 +184,31 @@ export default function AdminPage() {
     }
   };
 
+  const handleDownloadStats = async (ids?: number[]) => {
+    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '全部点位';
+    const count = ids && ids.length > 0 ? ids.length : points.length;
+
+    if (count === 0) {
+      setStatsMsg('暂无点位可导出');
+      setTimeout(() => setStatsMsg(null), 3000);
+      return;
+    }
+
+    setStatsDownloading(true);
+    setStatsMsg(null);
+    setError(null);
+    try {
+      await adminDownloadStatsCsv(ids);
+      setStatsMsg(`${scopeLabel}共 ${count} 个点位，CSV 表格下载已开始`);
+      setTimeout(() => setStatsMsg(null), 5000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '统计表格下载失败';
+      setError(msg);
+    } finally {
+      setStatsDownloading(false);
+    }
+  };
+
   // ── 选择操作 ──
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
@@ -281,10 +310,13 @@ export default function AdminPage() {
           selectedIds={selectedIds}
           downloading={batchDownloading}
           batchMsg={batchMsg}
+          statsDownloading={statsDownloading}
+          statsMsg={statsMsg}
           onDownload={handleBatchDownload}
           onSelectAll={selectAll}
           onClearSelection={clearSelection}
           onInvertSelection={invertSelection}
+          onDownloadStats={handleDownloadStats}
         />
 
         {error && (

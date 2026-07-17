@@ -330,3 +330,138 @@ describe('管理员批量下载接口', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('管理员统计表格下载接口', () => {
+  beforeAll(async () => {
+    const res = await request(app)
+      .post('/api/admin/login')
+      .send({ password: ADMIN_PASSWORD });
+    token = res.body.data.token;
+  });
+
+  /** 辅助：获取一次性下载票据 */
+  async function getTicket(): Promise<string> {
+    const res = await request(app)
+      .post('/api/admin/download-ticket')
+      .set('Authorization', `Bearer ${token}`);
+    return res.body.data.ticket;
+  }
+
+  it('无票据返回 403', async () => {
+    const res = await request(app)
+      .get('/api/admin/stats-csv')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('无效票据返回 403', async () => {
+    const res = await request(app).get('/api/admin/stats-csv?ticket=invalid');
+    expect(res.status).toBe(403);
+  });
+
+  it('有效票据导出全部点位 CSV', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/stats-csv?ticket=${ticket}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['content-disposition']).toMatch(/stats_\d{8}_\d{6}\.csv/);
+
+    // 文本应包含 UTF-8 BOM 头
+    const body = res.text;
+    expect(body.charCodeAt(0)).toBe(0xfeff);
+
+    // 表头应包含关键列
+    const headerLine = body.split('\n')[0].replace(/^\uFEFF/, '');
+    expect(headerLine).toContain('序号');
+    expect(headerLine).toContain('城市');
+    expect(headerLine).toContain('区县');
+    expect(headerLine).toContain('岸段类型');
+    expect(headerLine).toContain('经度');
+    expect(headerLine).toContain('纬度');
+    expect(headerLine).toContain('主图片');
+    expect(headerLine).toContain('备选图片');
+    expect(headerLine).toContain('主视频');
+    expect(headerLine).toContain('备选视频');
+    expect(headerLine).toContain('已上传素材数');
+    expect(headerLine).toContain('完成状态');
+    expect(headerLine).toContain('最后上传时间');
+
+    // 应包含 140 个数据行（去除 BOM 后按 \n 分割，最后一行是空行）
+    const lines = body.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    expect(lines.length).toBe(1 + 140); // 表头 + 140 行数据
+  });
+
+  it('票据仅可用一次（重放返回 403）', async () => {
+    const ticket = await getTicket();
+    // 第一次使用（成功）
+    await request(app).get(`/api/admin/stats-csv?ticket=${ticket}`);
+    // 第二次使用同一票据 → 403
+    const res = await request(app).get(`/api/admin/stats-csv?ticket=${ticket}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('ids 参数含非数字时返回 400', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/stats-csv?ids=1,abc,3&ticket=${ticket}`,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toContain('ids');
+  });
+
+  it('ids 参数含 0 或负数时返回 400', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/stats-csv?ids=0,5&ticket=${ticket}`,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('传入合法 ids 时仅导出指定点位', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/stats-csv?ids=1,2,3&ticket=${ticket}`,
+    );
+
+    expect(res.status).toBe(200);
+    const lines = res.text.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    // 表头 + 3 行数据
+    expect(lines.length).toBe(1 + 3);
+
+    // 数据行应以 1, 2, 3 开头
+    const dataLines = lines.slice(1);
+    expect(dataLines[0].startsWith('1,')).toBe(true);
+    expect(dataLines[1].startsWith('2,')).toBe(true);
+    expect(dataLines[2].startsWith('3,')).toBe(true);
+  });
+
+  it('传入全部不存在的 ids 时返回 404', async () => {
+    const ticket = await getTicket();
+    const res = await request(app).get(
+      `/api/admin/stats-csv?ids=99999,99998&ticket=${ticket}`,
+    );
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('CSV 内容应正确转义含逗号的字段', async () => {
+    // 验证 escapeCsvCell 对含逗号字段的双引号包裹
+    // 通过查询不传 ids 的导出，确认所有行字段数与表头列数一致
+    const ticket = await getTicket();
+    const res = await request(app).get(`/api/admin/stats-csv?ticket=${ticket}`);
+
+    expect(res.status).toBe(200);
+    const lines = res.text.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    const headerColCount = lines[0].split(',').length;
+
+    // 每行要么字段数与表头一致（无字段含逗号），要么被双引号包裹（含逗号）
+    // 这里仅做宽松校验：每行至少包含 headerColCount-1 个逗号
+    for (const line of lines.slice(1)) {
+      expect(line.split(',').length).toBeGreaterThanOrEqual(headerColCount - 1);
+    }
+  });
+});

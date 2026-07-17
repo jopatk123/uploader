@@ -184,3 +184,32 @@ export async function adminBatchDownload(type: MaterialType, ids?: number[]): Pr
   a.click();
   document.body.removeChild(a);
 }
+
+/**
+ * 管理员下载点位统计表格（CSV）
+ *
+ * 使用一次性下载票据替代 URL 中直接传递 JWT token，避免 token 泄露。
+ * 流程：先通过鉴权接口获取票据 → 用票据发起浏览器原生下载
+ *
+ * @param ids 可选：仅导出指定点位；不传或传空数组则导出全部点位
+ */
+export async function adminDownloadStatsCsv(ids?: number[]): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error('未登录');
+
+  // 步骤1：获取一次性下载票据
+  const ticket = await fetchDownloadTicket();
+
+  // 步骤2：用票据发起浏览器原生下载
+  let url = `/api/admin/stats-csv?ticket=${encodeURIComponent(ticket)}`;
+  if (ids && ids.length > 0) {
+    url += `&ids=${encodeURIComponent(ids.join(','))}`;
+  }
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = ''; // 文件名由服务端 Content-Disposition 响应头决定
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}

@@ -29,10 +29,13 @@ interface Props {
   selectedIds: Set<number>;
   downloading: MaterialType | null;
   batchMsg: string | null;
+  statsDownloading: boolean;
+  statsMsg: string | null;
   onDownload: (type: MaterialType, ids?: number[]) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onInvertSelection: () => void;
+  onDownloadStats: (ids?: number[]) => void;
 }
 
 export default function BatchDownloadToolbar({
@@ -40,10 +43,13 @@ export default function BatchDownloadToolbar({
   selectedIds,
   downloading,
   batchMsg,
+  statsDownloading,
+  statsMsg,
   onDownload,
   onSelectAll,
   onClearSelection,
   onInvertSelection,
+  onDownloadStats,
 }: Props) {
   const hasSelection = selectedIds.size > 0;
   const selectedIdsArr = Array.from(selectedIds);
@@ -128,6 +134,34 @@ export default function BatchDownloadToolbar({
         })}
         {batchMsg && (
           <span className="text-xs text-status-green font-mono ml-auto">{batchMsg}</span>
+        )}
+      </div>
+
+      {/* 统计表格下载行 */}
+      <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-base-600/50">
+        <span className="text-xs text-base-400 font-mono">统计导出:</span>
+        <button
+          onClick={() => onDownloadStats(hasSelection ? selectedIdsArr : undefined)}
+          disabled={statsDownloading || downloading !== null || points.length === 0}
+          title={
+            hasSelection
+              ? `导出选中的 ${selectedIds.size} 个点位统计为 CSV 表格`
+              : `导出全部 ${points.length} 个点位统计为 CSV 表格`
+          }
+          className="px-3 py-1.5 text-xs font-mono rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 bg-base-300/20 border-base-300/40 text-base-100 hover:bg-base-300/30"
+        >
+          {statsDownloading && (
+            <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+          )}
+          {statsDownloading
+            ? '生成表格中...'
+            : `${hasSelection ? '导出选中' : '导出全部'}统计表格 (${hasSelection ? selectedIds.size : points.length})`}
+        </button>
+        <span className="text-xs text-base-500 font-mono">
+          CSV 含区域、经纬度、各素材上传状态、完成度等
+        </span>
+        {statsMsg && (
+          <span className="text-xs text-status-green font-mono ml-auto">{statsMsg}</span>
         )}
       </div>
     </div>

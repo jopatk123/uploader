@@ -71,6 +71,165 @@ function parseIdsParam(raw: unknown): number[] | null {
 }
 
 /**
+ * CSV 表格列定义：每个条目对应一列
+ * - key: 行对象字段名
+ * - header: CSV 表头文字
+ */
+interface StatsCsvColumn {
+  key: string;
+  header: string;
+}
+
+const STATS_CSV_COLUMNS: StatsCsvColumn[] = [
+  { key: 'id', header: '序号' },
+  { key: 'city', header: '城市' },
+  { key: 'district', header: '区县' },
+  { key: 'shore_type', header: '岸段类型' },
+  { key: 'lon', header: '经度' },
+  { key: 'lat', header: '纬度' },
+  { key: 'has_image', header: '主图片' },
+  { key: 'has_image_alt', header: '备选图片' },
+  { key: 'has_video', header: '主视频' },
+  { key: 'has_video_alt', header: '备选视频' },
+  { key: 'uploaded_count', header: '已上传素材数' },
+  { key: 'status', header: '完成状态' },
+  { key: 'upload_time', header: '最后上传时间' },
+];
+
+/**
+ * 将字段值统一格式化为 CSV 单元格安全字符串
+ * - 字符串中的双引号转义为两个双引号
+ * - 含逗号、双引号、换行符的字段用双引号包裹
+ * - null/undefined 转为空字符串
+ */
+function escapeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const str = typeof value === 'boolean' ? (value ? '是' : '否') : String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * 依据主图/主视频上传情况判定完成状态文案（与前端 getPointState 语义一致）
+ */
+function describePointStatus(hasImage: boolean, hasVideo: boolean): string {
+  if (hasImage && hasVideo) return '已完成（主图+主视频）';
+  if (hasImage || hasVideo) return '部分完成';
+  return '未上传';
+}
+
+/**
+ * GET /api/admin/stats-csv?ticket=xxx[&ids=1,2,3]
+ * 下载点位统计表格（CSV 格式，UTF-8 BOM 头确保 Excel 正确显示中文）
+ *   - 不传 ids：导出全部点位
+ *   - 传 ids：仅导出指定点位
+ *
+ * 鉴权方式：一次性下载票据（60秒有效，仅可用一次）
+ *
+ * 表格列：序号、城市、区县、岸段类型、经度、纬度、
+ *         主图片、备选图片、主视频、备选视频、
+ *         已上传素材数、完成状态、最后上传时间
+ */
+router.get('/stats-csv', ticketMiddleware, (req, res) => {
+  // 解析可选 ids 参数；非法值返回 400
+  let ids: number[] | null = null;
+  try {
+    ids = parseIdsParam(req.query.ids);
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+    return;
+  }
+
+  // 构造查询：默认全部，传 ids 时仅查询指定点位
+  const placeholders = ids ? ids.map(() => '?').join(',') : null;
+  const idFilter = placeholders ? `WHERE p.id IN (${placeholders})` : '';
+  const params: unknown[] = ids ?? [];
+
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
+      m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
+    FROM point_info p
+    LEFT JOIN point_material m ON p.id = m.point_id
+    ${idFilter}
+    ORDER BY p.id
+  `,
+    )
+    .all(...params) as Array<{
+    id: number;
+    city: string;
+    district: string;
+    lon: number;
+    lat: number;
+    shore_type: string;
+    img_path: string | null;
+    img_path_alt: string | null;
+    video_path: string | null;
+    video_path_alt: string | null;
+    upload_time: string | null;
+  }>;
+
+  if (rows.length === 0) {
+    res.status(404).json({ success: false, error: '没有可导出的点位' });
+    return;
+  }
+
+  // 计算字段并组装行
+  const dataRows = rows.map((r) => {
+    const hasImage = !!r.img_path;
+    const hasImageAlt = !!r.img_path_alt;
+    const hasVideo = !!r.video_path;
+    const hasVideoAlt = !!r.video_path_alt;
+    const uploadedCount =
+      [hasImage, hasImageAlt, hasVideo, hasVideoAlt].filter(Boolean).length;
+    return {
+      id: r.id,
+      city: r.city,
+      district: r.district,
+      shore_type: r.shore_type,
+      lon: r.lon,
+      lat: r.lat,
+      has_image: hasImage,
+      has_image_alt: hasImageAlt,
+      has_video: hasVideo,
+      has_video_alt: hasVideoAlt,
+      uploaded_count: uploadedCount,
+      status: describePointStatus(hasImage, hasVideo),
+      upload_time: r.upload_time ?? '',
+    };
+  });
+
+  // 生成 CSV 文本
+  const headerLine = STATS_CSV_COLUMNS.map((c) => escapeCsvCell(c.header)).join(',');
+  const bodyLines = dataRows.map((row) =>
+    STATS_CSV_COLUMNS.map((col) => escapeCsvCell(row[col.key as keyof typeof row])).join(','),
+  );
+  // 加 UTF-8 BOM 头，确保 Excel 打开时正确识别中文
+  const csvContent = '\uFEFF' + headerLine + '\n' + bodyLines.join('\n') + '\n';
+
+  // 生成文件名：stats_YYYYMMDD_HHmmss.csv
+  const now = new Date();
+  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  const fileName = `stats_${ts}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  const scopeLabel = ids ? `指定 ${ids.length} 个点位` : '全部点位';
+  console.log(`[stats-csv] 导出完成 (${scopeLabel}): ${dataRows.length} 行`);
+
+  res.send(csvContent);
+});
+
+/**
  * GET /api/admin/batch-download?type=img|img_alt|video|video_alt&ticket=xxx[&ids=1,2,3]
  * 批量下载点位素材（zip 流式打包）
  *   - 不传 ids：下载所有已上传该类型素材的点位
