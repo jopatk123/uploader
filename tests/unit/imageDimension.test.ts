@@ -82,9 +82,10 @@ describe('imageDimension 工具函数', () => {
       expect(isPanoramicDimension({ width: 8000, height: 4000 })).toBe(true);
     });
 
-    it('容差范围内通过（±2%）', () => {
-      expect(isPanoramicDimension({ width: 2020, height: 1000 })).toBe(true);
-      expect(isPanoramicDimension({ width: 1980, height: 1000 })).toBe(true);
+    it('非严格 2:1 不通过（已取消容差）', () => {
+      expect(isPanoramicDimension({ width: 2020, height: 1000 })).toBe(false);
+      expect(isPanoramicDimension({ width: 1980, height: 1000 })).toBe(false);
+      expect(isPanoramicDimension({ width: 2202, height: 1097 })).toBe(false);
     });
 
     it('1:1 不通过', () => {

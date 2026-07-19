@@ -1,21 +1,18 @@
 /**
  * 全景图校验工具
- * 要求上传的图片像素比为 2:1（宽:高），例如 8000x4000、4000x2000
+ * 要求上传的图片像素比严格为 2:1（宽:高），例如 8000x4000、4000x2000
  */
 
 /** 期望的宽高比（宽 / 高） */
 export const PANORAMIC_RATIO = 2;
 
-/** 容差：允许 ±2% 的偏差，兼容边缘像素取整 */
-const RATIO_TOLERANCE = 0.02;
-
 /**
- * 判断给定宽高是否符合全景图比例（2:1，允许 ±2% 容差）
+ * 判断给定宽高是否严格符合全景图比例（2:1）
+ * 使用整数乘法比较，避免浮点除法精度问题
  */
 export function isPanoramicRatio(width: number, height: number): boolean {
   if (width <= 0 || height <= 0) return false;
-  const ratio = width / height;
-  return Math.abs(ratio - PANORAMIC_RATIO) <= RATIO_TOLERANCE * PANORAMIC_RATIO;
+  return width === PANORAMIC_RATIO * height;
 }
 
 /**

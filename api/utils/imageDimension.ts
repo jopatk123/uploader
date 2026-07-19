@@ -38,12 +38,12 @@ export function getImageDimension(filePath: string): ImageDimension | null {
 }
 
 /**
- * 判断图片是否符合全景图比例（2:1，允许 ±2% 容差）
+ * 判断图片是否严格符合全景图比例（2:1）
+ * 使用整数乘法比较，避免浮点除法精度问题
  */
 export function isPanoramicDimension(dim: ImageDimension): boolean {
   if (dim.width <= 0 || dim.height <= 0) return false;
-  const ratio = dim.width / dim.height;
-  return Math.abs(ratio - 2) <= 0.04; // 2 ± 2%
+  return dim.width === 2 * dim.height;
 }
 
 // ────────────────── 格式解析 ──────────────────

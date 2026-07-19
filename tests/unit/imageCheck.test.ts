@@ -33,11 +33,13 @@ describe('imageCheck 工具函数', () => {
       expect(isPanoramicRatio(4000, 2000)).toBe(true);
     });
 
-    it('接近 2:1（±2% 容差内）通过', () => {
-      // 2.02:1 — 容差边界
-      expect(isPanoramicRatio(2020, 1000)).toBe(true);
-      // 1.98:1 — 容差边界
-      expect(isPanoramicRatio(1980, 1000)).toBe(true);
+    it('非严格 2:1 不通过（已取消容差）', () => {
+      // 2.02:1 — 原容差边界，现在不通过
+      expect(isPanoramicRatio(2020, 1000)).toBe(false);
+      // 1.98:1 — 原容差边界，现在不通过
+      expect(isPanoramicRatio(1980, 1000)).toBe(false);
+      // 2202×1097 ≈ 2.0073:1 也不通过
+      expect(isPanoramicRatio(2202, 1097)).toBe(false);
     });
 
     it('16:9 不通过', () => {
