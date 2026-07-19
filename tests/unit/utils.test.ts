@@ -2,7 +2,7 @@
  * 前端工具函数单元测试
  */
 import { describe, it, expect } from 'vitest';
-import { cn, getPointState } from '@/lib/utils';
+import { cn, getPointState, formatBeijingTime } from '@/lib/utils';
 
 describe('cn 工具函数', () => {
   it('合并多个 className', () => {
@@ -41,5 +41,30 @@ describe('getPointState 点位状态判定', () => {
 
   it('均未上传 → empty', () => {
     expect(getPointState(false, false)).toBe('empty');
+  });
+});
+
+describe('formatBeijingTime UTC→北京时间转换', () => {
+  it('空值返回空字符串', () => {
+    expect(formatBeijingTime(null)).toBe('');
+    expect(formatBeijingTime(undefined)).toBe('');
+    expect(formatBeijingTime('')).toBe('');
+  });
+
+  it('UTC 正午对应北京时间 20:00:00（UTC+8）', () => {
+    // SQLite datetime('now') 格式：'YYYY-MM-DD HH:MM:SS'（UTC，无时区标识）
+    expect(formatBeijingTime('2026-07-20 12:00:00')).toBe('2026-07-20 20:00:00');
+  });
+
+  it('UTC 跨日转北京时间：UTC 18:00 → 北京时间次日 02:00', () => {
+    expect(formatBeijingTime('2026-07-20 18:00:00')).toBe('2026-07-21 02:00:00');
+  });
+
+  it('UTC 月末跨月：2026-01-31 18:00 → 北京时间 2026-02-01 02:00', () => {
+    expect(formatBeijingTime('2026-01-31 18:00:00')).toBe('2026-02-01 02:00:00');
+  });
+
+  it('非法输入回退为原始字符串', () => {
+    expect(formatBeijingTime('not-a-date')).toBe('not-a-date');
   });
 });

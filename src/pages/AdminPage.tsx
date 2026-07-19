@@ -18,7 +18,7 @@ import {
   clearToken,
 } from '@/lib/api';
 import type { PointStatus, PointDetail, MaterialType } from '@/types';
-import { getPointState } from '@/lib/utils';
+import { getPointState, formatBeijingTime } from '@/lib/utils';
 
 type FilterType = 'all' | 'img_only' | 'video_only' | 'completed';
 
@@ -450,7 +450,7 @@ export default function AdminPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-base-400 text-xs font-mono">
-                        {p.upload_time || '-'}
+                        {formatBeijingTime(p.upload_time) || '-'}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">

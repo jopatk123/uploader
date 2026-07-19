@@ -3,6 +3,7 @@
  */
 import { Router } from 'express';
 import { db } from '../db.js';
+import { formatBeijingTime, beijingTimestamp } from '../utils/time.js';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.get('/stats-csv', (_req, res) => {
       has_video_alt: hasVideoAlt,
       uploaded_count: uploadedCount,
       status: describePointStatus(hasImage, hasVideo),
-      upload_time: r.upload_time ?? '',
+      upload_time: formatBeijingTime(r.upload_time),
     };
   });
 
@@ -99,8 +100,8 @@ router.get('/stats-csv', (_req, res) => {
   );
   const csvContent = '\uFEFF' + headerLine + '\n' + bodyLines.join('\n') + '\n';
 
-  const now = new Date();
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  // 生成文件名：stats_YYYYMMDD_HHmmss.csv（北京时间）
+  const ts = beijingTimestamp();
   const fileName = `stats_${ts}.csv`;
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

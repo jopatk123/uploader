@@ -7,6 +7,7 @@ import fs from 'fs';
 import archiver from 'archiver';
 import { db, STORAGE_DIR } from '../db.js';
 import { authMiddleware, ticketMiddleware, generateToken, verifyPassword, generateDownloadTicket } from '../middleware/auth.js';
+import { formatBeijingTime, beijingTimestamp } from '../utils/time.js';
 
 const router = Router();
 
@@ -199,7 +200,7 @@ router.get('/stats-csv', ticketMiddleware, (req, res) => {
       has_video_alt: hasVideoAlt,
       uploaded_count: uploadedCount,
       status: describePointStatus(hasImage, hasVideo),
-      upload_time: r.upload_time ?? '',
+      upload_time: formatBeijingTime(r.upload_time),
     };
   });
 
@@ -211,9 +212,8 @@ router.get('/stats-csv', ticketMiddleware, (req, res) => {
   // 加 UTF-8 BOM 头，确保 Excel 打开时正确识别中文
   const csvContent = '\uFEFF' + headerLine + '\n' + bodyLines.join('\n') + '\n';
 
-  // 生成文件名：stats_YYYYMMDD_HHmmss.csv
-  const now = new Date();
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  // 生成文件名：stats_YYYYMMDD_HHmmss.csv（北京时间）
+  const ts = beijingTimestamp();
   const fileName = `stats_${ts}.csv`;
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -288,9 +288,8 @@ router.get('/batch-download', ticketMiddleware, (req, res) => {
     return;
   }
 
-  // 生成 zip 文件名
-  const now = new Date();
-  const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  // 生成 zip 文件名（北京时间）
+  const ts = beijingTimestamp();
   const typeLabelMap: Record<string, string> = {
     img: 'images',
     img_alt: 'images_alt',
