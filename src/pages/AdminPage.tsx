@@ -76,18 +76,8 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await adminFetchPoints(filter);
+      const data = await adminFetchPoints('all');
       setPoints(data);
-      // 清理已不存在的选中项（如筛选条件切换后某些点位不再在列表中）
-      setSelectedIds((prev) => {
-        if (prev.size === 0) return prev;
-        const visibleIds = new Set(data.map((p) => p.id));
-        const next = new Set<number>();
-        for (const id of prev) {
-          if (visibleIds.has(id)) next.add(id);
-        }
-        return next;
-      });
     } catch (err) {
       if (!handleAuthError(err)) {
         setError(err instanceof Error ? err.message : '加载失败');
@@ -95,7 +85,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, handleAuthError]);
+  }, [handleAuthError]);
 
   useEffect(() => {
     if (authed) {
@@ -131,6 +121,43 @@ export default function AdminPage() {
     }
   };
 
+  // 前端筛选逻辑（与后端保持一致）
+  const filteredPoints = useMemo(() => {
+    if (filter === 'all') return points;
+    if (filter === 'img_only')
+      return points.filter((p) => p.has_image && !p.has_video);
+    if (filter === 'video_only')
+      return points.filter((p) => !p.has_image && p.has_video);
+    if (filter === 'completed')
+      return points.filter((p) => p.has_image && p.has_video);
+    return points;
+  }, [points, filter]);
+
+  // 各筛选类别的数量统计
+  const filterCounts = useMemo(
+    () => ({
+      all: points.length,
+      img_only: points.filter((p) => p.has_image && !p.has_video).length,
+      video_only: points.filter((p) => !p.has_image && p.has_video).length,
+      completed: points.filter((p) => p.has_image && p.has_video).length,
+    }),
+    [points],
+  );
+
+  // 统计概览（必须在早期 return 之前调用，避免 Hook 顺序不一致）
+  const stats = useMemo(
+    () => ({
+      total: points.length,
+      hasImage: points.filter((p) => p.has_image).length,
+      hasImageAlt: points.filter((p) => p.has_image_alt).length,
+      hasVideo: points.filter((p) => p.has_video).length,
+      hasVideoAlt: points.filter((p) => p.has_video_alt).length,
+      completed: points.filter((p) => p.has_image && p.has_video).length,
+      partial: points.filter((p) => getPointState(p.has_image, p.has_video) === 'partial').length,
+    }),
+    [points],
+  );
+
   const handleClearAll = async (id: number) => {
     setError(null);
     const point = points.find((p) => p.id === id);
@@ -157,10 +184,10 @@ export default function AdminPage() {
   const handleBatchDownload = async (type: MaterialType, ids?: number[]) => {
     const label = TYPE_LABEL[type];
     const hasKey = HAS_KEY[type];
-    // 根据是否传入 ids 决定统计范围（仅用于提示文案，后端会再次过滤未上传素材的点位）
-    const pool = ids ? points.filter((p) => ids.includes(p.id)) : points;
+    const targetIds = ids ?? filteredPoints.map((p) => p.id);
+    const pool = points.filter((p) => targetIds.includes(p.id));
     const count = pool.filter((p) => p[hasKey]).length;
-    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '全部点位';
+    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '当前筛选';
 
     if (count === 0) {
       setBatchMsg(`${scopeLabel}中暂无已上传的${label}素材`);
@@ -172,8 +199,7 @@ export default function AdminPage() {
     setBatchMsg(null);
     setError(null);
     try {
-      await adminBatchDownload(type, ids);
-      // 浏览器原生下载已触发，文件将出现在浏览器下载栏中
+      await adminBatchDownload(type, targetIds);
       setBatchMsg(`${scopeLabel} ${label}共 ${count} 个文件，下载已开始`);
       setTimeout(() => setBatchMsg(null), 5000);
     } catch (err) {
@@ -185,8 +211,9 @@ export default function AdminPage() {
   };
 
   const handleDownloadStats = async (ids?: number[]) => {
-    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '全部点位';
-    const count = ids && ids.length > 0 ? ids.length : points.length;
+    const targetIds = ids ?? filteredPoints.map((p) => p.id);
+    const scopeLabel = ids && ids.length > 0 ? '选中点位' : '当前筛选';
+    const count = targetIds.length;
 
     if (count === 0) {
       setStatsMsg('暂无点位可导出');
@@ -198,7 +225,7 @@ export default function AdminPage() {
     setStatsMsg(null);
     setError(null);
     try {
-      await adminDownloadStatsCsv(ids);
+      await adminDownloadStatsCsv(targetIds);
       setStatsMsg(`${scopeLabel}共 ${count} 个点位，CSV 表格下载已开始`);
       setTimeout(() => setStatsMsg(null), 5000);
     } catch (err) {
@@ -220,7 +247,7 @@ export default function AdminPage() {
   };
 
   const selectAll = () => {
-    setSelectedIds(new Set(points.map((p) => p.id)));
+    setSelectedIds(new Set(filteredPoints.map((p) => p.id)));
   };
 
   const clearSelection = () => {
@@ -230,7 +257,7 @@ export default function AdminPage() {
   const invertSelection = () => {
     setSelectedIds((prev) => {
       const next = new Set<number>();
-      for (const p of points) {
+      for (const p of filteredPoints) {
         if (!prev.has(p.id)) next.add(p.id);
       }
       return next;
@@ -238,22 +265,8 @@ export default function AdminPage() {
   };
 
   // 当前页是否全选（用于表头复选框的 indeterminate 状态）
-  const allSelected = points.length > 0 && selectedIds.size === points.length;
-  const someSelected = selectedIds.size > 0 && selectedIds.size < points.length;
-
-  // 统计概览（必须在早期 return 之前调用，避免 Hook 顺序不一致）
-  const stats = useMemo(
-    () => ({
-      total: points.length,
-      hasImage: points.filter((p) => p.has_image).length,
-      hasImageAlt: points.filter((p) => p.has_image_alt).length,
-      hasVideo: points.filter((p) => p.has_video).length,
-      hasVideoAlt: points.filter((p) => p.has_video_alt).length,
-      completed: points.filter((p) => p.has_image && p.has_video).length,
-      partial: points.filter((p) => getPointState(p.has_image, p.has_video) === 'partial').length,
-    }),
-    [points],
-  );
+  const allSelected = filteredPoints.length > 0 && selectedIds.size === filteredPoints.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < filteredPoints.length;
 
   if (!authed) {
     return <LoginModal onLogin={handleLogin} />;
@@ -304,7 +317,7 @@ export default function AdminPage() {
 
         {/* 批量下载工具栏（含点位选择操作） */}
         <BatchDownloadToolbar
-          points={points}
+          points={filteredPoints}
           selectedIds={selectedIds}
           downloading={batchDownloading}
           batchMsg={batchMsg}
@@ -340,10 +353,17 @@ export default function AdminPage() {
               `}
             >
               {f.label}
+              <span
+                className={`ml-1.5 ${
+                  filter === f.value ? 'text-base-900/70' : 'text-base-500'
+                }`}
+              >
+                ({filterCounts[f.value]})
+              </span>
             </button>
           ))}
           <span className="ml-auto text-xs text-base-400 font-mono">
-            {loading ? '加载中...' : `共 ${points.length} 条`}
+            {loading ? '加载中...' : `共 ${filteredPoints.length} 条`}
           </span>
         </div>
 
@@ -363,7 +383,7 @@ export default function AdminPage() {
                       if (allSelected) clearSelection();
                       else selectAll();
                     }}
-                    disabled={loading || points.length === 0}
+                    disabled={loading || filteredPoints.length === 0}
                     className="w-4 h-4 cursor-pointer accent-current"
                     title="全选/取消全选"
                   />
@@ -391,14 +411,14 @@ export default function AdminPage() {
                     加载中...
                   </td>
                 </tr>
-              ) : points.length === 0 ? (
+              ) : filteredPoints.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-base-400">
                     无符合条件的点位
                   </td>
                 </tr>
               ) : (
-                points.map((p) => {
+                filteredPoints.map((p) => {
                   const hasAny = p.has_image || p.has_image_alt || p.has_video || p.has_video_alt;
                   const isChecked = selectedIds.has(p.id);
                   return (
