@@ -2,6 +2,7 @@
  * 点位状态点阵组件
  * 140个圆点：绿色=主图+主视频全部完成，黄色=仅上传其一，红色=均未上传
  * 点阵上方增加按区域（区县）分组的统计，一眼看出各区域完成进度
+ * 点击区域卡片可高亮闪烁该区域对应的点位
  */
 import { useState, useMemo } from 'react';
 import type { PointStatus } from '@/types';
@@ -36,6 +37,7 @@ const STATE_GLOW: Record<PointState, string> = {
 
 export default function PointDotGrid({ points, selectedId, onSelect, statsDownloading, onDownloadStats }: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [highlightedDistrict, setHighlightedDistrict] = useState<string | null>(null);
 
   const completedCount = points.filter(p => p.has_image && p.has_video).length;
   const partialCount = points.filter(p => getPointState(p.has_image, p.has_video) === 'partial').length;
@@ -59,6 +61,10 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
   }, [points]);
 
   const totalPercent = points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
+
+  const handleRegionClick = (districtName: string) => {
+    setHighlightedDistrict(highlightedDistrict === districtName ? null : districtName);
+  };
 
   return (
     <div className="bg-base-700 border border-base-600 rounded-lg p-4">
@@ -108,10 +114,17 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
           const isAllDone = r.completed === r.total;
           // 区域整体状态：全部完成→绿；存在部分完成→黄；否则→青
           const barColor = isAllDone ? 'bg-status-green' : r.partial > 0 ? 'bg-status-yellow' : 'bg-accent';
+          const isActive = highlightedDistrict === r.name;
           return (
-            <div
+            <button
               key={r.name}
-              className="bg-base-800 border border-base-600 rounded-lg p-3"
+              onClick={() => handleRegionClick(r.name)}
+              className={`
+                bg-base-800 border rounded-lg p-3 text-left
+                transition-all duration-200 cursor-pointer
+                hover:bg-base-800/80 hover:border-accent/60 hover:shadow-lg hover:shadow-accent/10
+                ${isActive ? 'border-accent shadow-md shadow-accent/30 ring-2 ring-accent/30' : 'border-base-600'}
+              `}
             >
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-mono text-xs text-base-100 truncate">{r.name}</span>
@@ -130,7 +143,7 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
                   ? '已完成'
                   : `缺 ${r.total - r.completed} 个${r.partial > 0 ? ` · 部分 ${r.partial}` : ''}`}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -140,6 +153,19 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
           const state = getPointState(p.has_image, p.has_video);
           const isSelected = p.id === selectedId;
           const isHovered = p.id === hoveredId;
+          const isHighlighted = highlightedDistrict !== null && highlightedDistrict === p.district;
+          const hasActiveHighlight = highlightedDistrict !== null;
+
+          let scale = 1;
+          if (isSelected) {
+            scale = 1.1;
+          } else if (isHovered) {
+            scale = 1.25;
+          } else if (isHighlighted) {
+            scale = 1.1;
+          } else if (hasActiveHighlight) {
+            scale = 0.7;
+          }
 
           return (
             <div
@@ -153,11 +179,14 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
                 className={`
                   w-full aspect-square rounded-full transition-all duration-150
                   ${STATE_BG[state]}
-                  ${isSelected ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-700 scale-110' : ''}
-                  ${isHovered ? 'scale-125' : ''}
+                  ${isSelected ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-700' : ''}
+                  ${isHighlighted ? 'ring-1 ring-accent ring-offset-1 ring-offset-base-700' : ''}
                   hover:shadow-lg
                 `}
-                style={{ boxShadow: STATE_GLOW[state] }}
+                style={{
+                  transform: `scale(${scale})`,
+                  boxShadow: isHighlighted ? '0 0 6px #00d4ff66' : STATE_GLOW[state],
+                }}
               />
               <span className="absolute inset-0 flex items-center justify-center text-[8px] font-mono text-base-900 font-bold pointer-events-none">
                 {p.id}
