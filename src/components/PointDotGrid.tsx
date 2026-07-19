@@ -58,6 +58,8 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [points]);
 
+  const totalPercent = points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
+
   return (
     <div className="bg-base-700 border border-base-600 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
@@ -65,8 +67,9 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
           <h3 className="font-mono text-sm text-base-200">
             点位状态总览
             <span className="ml-2 text-base-400">
-              (完成 {completedCount} · 部分 {partialCount} · 共 {points.length})
+              完成 {completedCount} · 部分 {partialCount} · 共 {points.length}
             </span>
+            <span className="ml-2 text-accent font-bold">{totalPercent}%</span>
           </h3>
           {onDownloadStats && (
             <button
@@ -113,7 +116,7 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-mono text-xs text-base-100 truncate">{r.name}</span>
                 <span className={`font-mono text-xs ${isAllDone ? 'text-status-green' : 'text-base-400'}`}>
-                  {r.completed}/{r.total}
+                  {r.completed}/{r.total} · {percent}%
                 </span>
               </div>
               <div className="h-1.5 bg-base-900 rounded-full overflow-hidden">

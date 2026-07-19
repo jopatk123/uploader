@@ -33,6 +33,8 @@ export default function UploadPage() {
   }, [loadPoints]);
 
   const selectedPoint = points.find(p => p.id === selectedId) || null;
+  const completedCount = points.filter(p => p.has_image && p.has_video).length;
+  const completedPercent = points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
 
   const handleNeedConfirm = (callback: () => void) => {
     setConfirmAction({
@@ -69,7 +71,7 @@ export default function UploadPage() {
             </div>
             <div>
               <h1 className="font-mono text-base text-base-100">无人机点位素材上传系统</h1>
-              <p className="text-xs text-base-400">福州沿海测绘点位 · {points.length}个点位</p>
+              <p className="text-xs text-base-400">福州沿海测绘点位 · {points.length}个点位 · <span className="text-accent font-bold">{completedPercent}%</span> 已完成</p>
             </div>
             <a
               href="https://docs.qq.com/sheet/DRGVqV01aR2xyRkJW?tab=BB08J2"
