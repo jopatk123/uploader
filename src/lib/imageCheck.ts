@@ -201,3 +201,137 @@ function checkGpsInTiff(view: DataView, tiffOffset: number): boolean {
 
   return hasLat && hasLon;
 }
+
+// ────────────────── 纯黑像素占比校验 ──────────────────
+//
+// 防御性校验：部分无人机夜景或损坏图存在大片纯黑区域，
+// 这类图片对测绘无价值。校验图片中纯黑像素占比，超过阈值则拒绝上传。
+//
+// 设计权衡：
+// - 前端用 Canvas 解码像素做精确校验，用户立即得到反馈
+// - 后端不重复校验（解码 JPEG/WEBP 像素需引入第三方依赖，与项目"避免膨胀"原则冲突）
+// - "纯黑"严格定义为 RGB(0,0,0)；提供 BLACK_THRESHOLD 常量便于后续放宽到近黑
+
+/** 纯黑像素占比上限（超过则拒绝上传） */
+export const MAX_BLACK_RATIO = 0.10;
+
+/** "纯黑"判定阈值：三通道 RGB 值均 ≤ 此值视为纯黑（默认 0 = 严格 RGB(0,0,0)） */
+export const BLACK_THRESHOLD = 0;
+
+/**
+ * 统计 RGBA 像素数据中纯黑像素的数量与占比
+ *
+ * 纯函数：仅依赖输入数据，无副作用，便于单元测试。
+ * 输入为 Canvas getImageData 返回的 Uint8ClampedArray / Uint8Array，
+ * 每 4 字节表示一个像素的 R、G、B、A。
+ *
+ * @param data     RGBA 像素数据
+ * @param threshold 三通道 RGB 值均 ≤ 此值视为纯黑（默认 0）
+ * @returns { black, total, ratio } black=纯黑像素数，total=总像素数，ratio=占比（0~1）
+ */
+export function countBlackPixels(
+  data: Uint8ClampedArray | Uint8Array,
+  threshold: number = BLACK_THRESHOLD
+): { black: number; total: number; ratio: number } {
+  const total = Math.floor(data.length / 4);
+  if (total === 0) return { black: 0, total: 0, ratio: 0 };
+
+  let black = 0;
+  for (let i = 0; i < total; i++) {
+    const offset = i * 4;
+    // 透明像素不计入（A=0 时 RGB 通常为 0 但视觉上不是黑色）
+    if (data[offset + 3] === 0) continue;
+    if (
+      data[offset] <= threshold &&
+      data[offset + 1] <= threshold &&
+      data[offset + 2] <= threshold
+    ) {
+      black++;
+    }
+  }
+  return { black, total, ratio: black / total };
+}
+
+/** 降采样最大边长：超过此尺寸的图片会缩放到此尺寸内再统计，避免大图卡 UI */
+const BLACK_CHECK_MAX_DIMENSION = 2048;
+
+/**
+ * 校验图片纯黑像素占比是否在阈值内
+ *
+ * 实现细节：
+ * - 通过 Canvas drawImage 解码图片到 canvas
+ * - 大图降采样到最大边 2048 像素内（保持原始比例），降低内存与计算量
+ * - 使用 getImageData 读取像素，调用 countBlackPixels 统计
+ * - 任何解码异常均视为「无法校验」，放行上传（避免误伤）
+ *
+ * @returns { ok, ratio, sampledPixels }
+ *   - ok: true 表示通过校验（占比 ≤ MAX_BLACK_RATIO）；false 表示超限应拒绝
+ *   - ratio: 纯黑像素占比（0~1）
+ *   - sampledPixels: 采样像素总数（降采样后）
+ */
+export async function checkBlackPixelRatio(
+  file: File
+): Promise<{ ok: boolean; ratio: number; sampledPixels: number }> {
+  try {
+    const bitmap = await loadBitmapForSampling(file);
+    const { width, height } = bitmap;
+
+    // 降采样：保持原始宽高比，最大边不超过 BLACK_CHECK_MAX_DIMENSION
+    const maxDim = Math.max(width, height);
+    const scale = maxDim > BLACK_CHECK_MAX_DIMENSION ? BLACK_CHECK_MAX_DIMENSION / maxDim : 1;
+    const targetW = Math.max(1, Math.round(width * scale));
+    const targetH = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      // 无法获取 canvas 上下文（极少见），放行
+      return { ok: true, ratio: 0, sampledPixels: 0 };
+    }
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+
+    const imageData = ctx.getImageData(0, 0, targetW, targetH);
+    const { total, ratio } = countBlackPixels(imageData.data);
+
+    // 释放资源
+    if ('close' in bitmap && typeof bitmap.close === 'function') {
+      bitmap.close();
+    }
+
+    return { ok: ratio <= MAX_BLACK_RATIO, ratio, sampledPixels: total };
+  } catch {
+    // 解码失败：放行（其他校验会兜底）
+    return { ok: true, ratio: 0, sampledPixels: 0 };
+  }
+}
+
+/**
+ * 加载图片为 ImageBitmap 或 HTMLImageElement，供 Canvas 绘制使用
+ * 优先用 createImageBitmap（性能更好），失败时回退到 Image + createObjectURL
+ */
+async function loadBitmapForSampling(
+  file: File
+): Promise<ImageBitmap | HTMLImageElement> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file);
+    } catch {
+      // fallthrough to Image fallback
+    }
+  }
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('无法解码图片'));
+    };
+    img.src = url;
+  });
+}

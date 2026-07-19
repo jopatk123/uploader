@@ -8,7 +8,12 @@ import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 import { compressImageIfNeeded, shouldCompress } from '@/lib/imageCompress';
-import { checkPanoramic, hasGpsExif } from '@/lib/imageCheck';
+import {
+  checkPanoramic,
+  hasGpsExif,
+  checkBlackPixelRatio,
+  MAX_BLACK_RATIO,
+} from '@/lib/imageCheck';
 
 interface Props {
   pointId: number | null;
@@ -81,6 +86,22 @@ export default function ImageUploadPanel({
     } catch {
       setError('无法读取图片尺寸，文件可能已损坏，请更换图片重试');
       return;
+    }
+
+    // 校验纯黑像素占比（防止上传全黑/损坏图）
+    try {
+      const { ok, ratio, sampledPixels } = await checkBlackPixelRatio(selected);
+      if (!ok) {
+        const percent = (ratio * 100).toFixed(2);
+        const limitPercent = (MAX_BLACK_RATIO * 100).toFixed(0);
+        setError(
+          `图片纯黑像素占比 ${percent}% 超过 ${limitPercent}% 限制（采样 ${sampledPixels} 像素），可能为全黑/损坏图，请更换图片重试`
+        );
+        return;
+      }
+    } catch {
+      // 黑像素校验失败不阻塞上传（其他校验会兜底）
+      console.warn('纯黑像素校验异常，跳过');
     }
 
     setFile(selected);
@@ -169,7 +190,7 @@ export default function ImageUploadPanel({
       </div>
 
       <div className="text-xs text-base-400 mb-3 font-mono">
-        格式: JPG / PNG / WEBP · 必须为全景图（2:1）
+        格式: JPG / PNG / WEBP · 必须为全景图（2:1）· 纯黑像素 ≤ 10%
       </div>
 
       <input
@@ -200,7 +221,7 @@ export default function ImageUploadPanel({
         ) : (
           <div className="text-base-300">
             <p className="text-sm">点击选择{isAlt ? '备选' : ''}图片</p>
-            <p className="text-xs text-base-400 mt-1">JPG / PNG / WEBP · 全景图 2:1</p>
+            <p className="text-xs text-base-400 mt-1">JPG / PNG / WEBP · 全景图 2:1 · 纯黑 ≤ 10%</p>
           </div>
         )}
       </label>

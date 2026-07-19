@@ -7,11 +7,16 @@ import zlib from 'zlib';
 /**
  * 生成合法的 PNG buffer（灰度图，color type 0, bit depth 8）
  *
- * @param width  图片宽度（像素）
- * @param height 图片高度（像素）
+ * @param width     图片宽度（像素）
+ * @param height    图片高度（像素）
+ * @param pixelFn   可选：自定义像素值函数 (x, y) => 0~255；默认 (x+y)%256 渐变灰度
  * @returns 合法的 PNG 文件 buffer
  */
-export function makePngBuffer(width: number, height: number): Buffer {
+export function makePngBuffer(
+  width: number,
+  height: number,
+  pixelFn: (x: number, y: number) => number = (x, y) => (x + y) % 256
+): Buffer {
   // PNG 签名
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -32,7 +37,7 @@ export function makePngBuffer(width: number, height: number): Buffer {
     const rowStart = y * rowLength;
     rawData[rowStart] = 0; // filter: none
     for (let x = 0; x < width; x++) {
-      rawData[rowStart + 1 + x] = (x + y) % 256; // 灰度像素值
+      rawData[rowStart + 1 + x] = pixelFn(x, y) & 0xff;
     }
   }
 
