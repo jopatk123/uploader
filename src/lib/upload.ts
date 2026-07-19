@@ -32,7 +32,7 @@ async function uploadChunk(
   fileId: string,
   pointId: number,
   type: UploadType,
-  fileName: string
+  fileName: string,
 ): Promise<void> {
   const formData = new FormData();
   formData.append('chunk', chunk, `chunk-${index}`);
@@ -62,7 +62,7 @@ async function completeUpload(
   pointId: number,
   type: UploadType,
   fileName: string,
-  totalChunks: number
+  totalChunks: number,
 ): Promise<void> {
   const res = await fetch('/api/upload/complete', {
     method: 'POST',
@@ -85,7 +85,7 @@ export async function uploadFile(
   pointId: number,
   type: UploadType,
   fileId: string,
-  onProgress: (progress: UploadProgress) => void
+  onProgress: (progress: UploadProgress) => void,
 ): Promise<void> {
   const fileSize = file.size;
   const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);

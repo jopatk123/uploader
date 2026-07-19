@@ -165,11 +165,9 @@ export function initDatabase() {
 
   // 导入140条固定点位数据（如不存在）
   const insertPoint = db.prepare(
-    'INSERT OR IGNORE INTO point_info (id, city, district, lon, lat, shore_type) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO point_info (id, city, district, lon, lat, shore_type) VALUES (?, ?, ?, ?, ?, ?)',
   );
-  const insertMaterial = db.prepare(
-    'INSERT OR IGNORE INTO point_material (point_id) VALUES (?)'
-  );
+  const insertMaterial = db.prepare('INSERT OR IGNORE INTO point_material (point_id) VALUES (?)');
 
   const importAll = db.transaction(() => {
     for (const p of POINTS_DATA) {
@@ -185,7 +183,7 @@ export function initDatabase() {
  */
 function migrateAddColumn(table: string, column: string, type: string) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (!cols.some(c => c.name === column)) {
+  if (!cols.some((c) => c.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
     console.log(`[db] 迁移: ${table}.${column} 已添加`);
   }

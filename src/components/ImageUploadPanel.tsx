@@ -79,7 +79,7 @@ export default function ImageUploadPanel({
       const { ok, width, height } = await checkPanoramic(selected);
       if (!ok) {
         setError(
-          `必须是全景图（像素比 2:1）才能上传，当前图片尺寸为 ${width}×${height}（${(width / height).toFixed(2)}:1）`
+          `必须是全景图（像素比 2:1）才能上传，当前图片尺寸为 ${width}×${height}（${(width / height).toFixed(2)}:1）`,
         );
         return;
       }
@@ -95,7 +95,7 @@ export default function ImageUploadPanel({
         const percent = (ratio * 100).toFixed(2);
         const limitPercent = (MAX_BLACK_RATIO * 100).toFixed(0);
         setError(
-          `图片纯黑像素占比 ${percent}% 超过 ${limitPercent}% 限制（采样 ${sampledPixels} 像素），可能为全黑/损坏图，请更换图片重试`
+          `图片纯黑像素占比 ${percent}% 超过 ${limitPercent}% 限制（采样 ${sampledPixels} 像素），可能为全黑/损坏图，请更换图片重试`,
         );
         return;
       }
@@ -139,13 +139,8 @@ export default function ImageUploadPanel({
       const fileId = generateFileId(fileToUpload);
 
       // 分片上传（type 区分主图/备选图）
-      await uploadFile(
-        fileToUpload,
-        fileToUpload.name,
-        pointId,
-        type,
-        fileId,
-        (progress) => setUploadProgress(progress)
+      await uploadFile(fileToUpload, fileToUpload.name, pointId, type, fileId, (progress) =>
+        setUploadProgress(progress),
       );
 
       setSuccess(true);
@@ -169,7 +164,10 @@ export default function ImageUploadPanel({
     }
   };
 
-  const isUploading = uploadProgress?.phase === 'compressing' || uploadProgress?.phase === 'uploading' || uploadProgress?.phase === 'merging';
+  const isUploading =
+    uploadProgress?.phase === 'compressing' ||
+    uploadProgress?.phase === 'uploading' ||
+    uploadProgress?.phase === 'merging';
 
   const title = isAlt ? '备选图片上传' : '图片上传';
   const accentColor = isAlt ? 'bg-status-yellow' : 'bg-accent';
@@ -178,7 +176,9 @@ export default function ImageUploadPanel({
   const successText = isAlt ? '备选图片上传成功' : '图片上传成功';
 
   return (
-    <div className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}>
+    <div
+      className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-mono text-sm text-base-100 flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${accentColor}`}></span>
@@ -207,9 +207,10 @@ export default function ImageUploadPanel({
         htmlFor={disabled || isUploading ? '' : inputId}
         className={`
           block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
-          ${disabled || isUploading
-            ? 'border-base-600 cursor-not-allowed'
-            : `border-base-500 ${borderColor} ${hoverBg}`
+          ${
+            disabled || isUploading
+              ? 'border-base-600 cursor-not-allowed'
+              : `border-base-500 ${borderColor} ${hoverBg}`
           }
         `}
       >

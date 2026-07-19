@@ -35,12 +35,20 @@ const STATE_GLOW: Record<PointState, string> = {
   empty: '0 0 6px #ef444488',
 };
 
-export default function PointDotGrid({ points, selectedId, onSelect, statsDownloading, onDownloadStats }: Props) {
+export default function PointDotGrid({
+  points,
+  selectedId,
+  onSelect,
+  statsDownloading,
+  onDownloadStats,
+}: Props) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [highlightedDistrict, setHighlightedDistrict] = useState<string | null>(null);
 
-  const completedCount = points.filter(p => p.has_image && p.has_video).length;
-  const partialCount = points.filter(p => getPointState(p.has_image, p.has_video) === 'partial').length;
+  const completedCount = points.filter((p) => p.has_image && p.has_video).length;
+  const partialCount = points.filter(
+    (p) => getPointState(p.has_image, p.has_video) === 'partial',
+  ).length;
 
   // 按区县分组统计
   const regionStats = useMemo<RegionStat[]>(() => {
@@ -109,11 +117,15 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
 
       {/* 按区域分组统计 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-        {regionStats.map(r => {
+        {regionStats.map((r) => {
           const percent = r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0;
           const isAllDone = r.completed === r.total;
           // 区域整体状态：全部完成→绿；存在部分完成→黄；否则→青
-          const barColor = isAllDone ? 'bg-status-green' : r.partial > 0 ? 'bg-status-yellow' : 'bg-accent';
+          const barColor = isAllDone
+            ? 'bg-status-green'
+            : r.partial > 0
+              ? 'bg-status-yellow'
+              : 'bg-accent';
           const isActive = highlightedDistrict === r.name;
           return (
             <button
@@ -128,7 +140,9 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
             >
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-mono text-xs text-base-100 truncate">{r.name}</span>
-                <span className={`font-mono text-xs ${isAllDone ? 'text-status-green' : 'text-base-400'}`}>
+                <span
+                  className={`font-mono text-xs ${isAllDone ? 'text-status-green' : 'text-base-400'}`}
+                >
                   {r.completed}/{r.total} · {percent}%
                 </span>
               </div>
@@ -149,7 +163,7 @@ export default function PointDotGrid({ points, selectedId, onSelect, statsDownlo
       </div>
 
       <div className="grid grid-cols-28 gap-1.5" style={{ gridTemplateColumns: 'repeat(28, 1fr)' }}>
-        {points.map(p => {
+        {points.map((p) => {
           const state = getPointState(p.has_image, p.has_video);
           const isSelected = p.id === selectedId;
           const isHovered = p.id === hoveredId;

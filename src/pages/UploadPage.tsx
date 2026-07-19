@@ -13,7 +13,10 @@ export default function UploadPage() {
   const [points, setPoints] = useState<PointStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ message: string; callback: () => void } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    message: string;
+    callback: () => void;
+  } | null>(null);
   const [showOverLimit, setShowOverLimit] = useState(false);
   const [showNoGpsWarning, setShowNoGpsWarning] = useState(false);
   const [statsDownloading, setStatsDownloading] = useState(false);
@@ -33,9 +36,10 @@ export default function UploadPage() {
     loadPoints();
   }, [loadPoints]);
 
-  const selectedPoint = points.find(p => p.id === selectedId) || null;
-  const completedCount = points.filter(p => p.has_image && p.has_video).length;
-  const completedPercent = points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
+  const selectedPoint = points.find((p) => p.id === selectedId) || null;
+  const completedCount = points.filter((p) => p.has_image && p.has_video).length;
+  const completedPercent =
+    points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
 
   const handleNeedConfirm = (callback: () => void) => {
     setConfirmAction({
@@ -72,7 +76,10 @@ export default function UploadPage() {
             </div>
             <div>
               <h1 className="font-mono text-base text-base-100">无人机点位素材上传系统</h1>
-              <p className="text-xs text-base-400">福州沿海测绘点位 · {points.length}个点位 · <span className="text-accent font-bold">{completedPercent}%</span> 已完成</p>
+              <p className="text-xs text-base-400">
+                福州沿海测绘点位 · {points.length}个点位 ·{' '}
+                <span className="text-accent font-bold">{completedPercent}%</span> 已完成
+              </p>
             </div>
             <a
               href="https://docs.qq.com/sheet/DRGVqV01aR2xyRkJW?tab=BB08J2"
@@ -118,7 +125,7 @@ export default function UploadPage() {
                 className="w-full bg-base-800 border border-base-600 rounded px-3 py-2.5 text-sm text-base-100 focus:border-accent focus:outline-none font-mono"
               >
                 <option value="">-- 请选择点位 --</option>
-                {points.map(p => (
+                {points.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.id} | {p.district} | {p.shore_type} | {p.lon.toFixed(4)}, {p.lat.toFixed(4)}
                   </option>
@@ -149,17 +156,29 @@ export default function UploadPage() {
                       <p className="text-base-100 font-mono">{selectedPoint.lat.toFixed(6)}</p>
                     </div>
                   </div>
-                      <div className="pt-2 border-t border-base-600 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                    <span className={selectedPoint.has_image ? 'text-status-green' : 'text-status-red'}>
+                  <div className="pt-2 border-t border-base-600 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span
+                      className={selectedPoint.has_image ? 'text-status-green' : 'text-status-red'}
+                    >
                       主图: {selectedPoint.has_image ? '已上传' : '未上传'}
                     </span>
-                    <span className={selectedPoint.has_image_alt ? 'text-status-green' : 'text-status-red'}>
+                    <span
+                      className={
+                        selectedPoint.has_image_alt ? 'text-status-green' : 'text-status-red'
+                      }
+                    >
                       备图: {selectedPoint.has_image_alt ? '已上传' : '未上传'}
                     </span>
-                    <span className={selectedPoint.has_video ? 'text-status-green' : 'text-status-red'}>
+                    <span
+                      className={selectedPoint.has_video ? 'text-status-green' : 'text-status-red'}
+                    >
                       主视频: {selectedPoint.has_video ? '已上传' : '未上传'}
                     </span>
-                    <span className={selectedPoint.has_video_alt ? 'text-status-green' : 'text-status-red'}>
+                    <span
+                      className={
+                        selectedPoint.has_video_alt ? 'text-status-green' : 'text-status-red'
+                      }
+                    >
                       备视频: {selectedPoint.has_video_alt ? '已上传' : '未上传'}
                     </span>
                   </div>
@@ -255,9 +274,12 @@ export default function UploadPage() {
           title="图片未含经纬度信息"
           message={
             <div className="space-y-2">
-              <p>你上传的图片不含经纬度信息，请尽量上传无人机导出的原图，不要经过微信QQ等工具发送。</p>
+              <p>
+                你上传的图片不含经纬度信息，请尽量上传无人机导出的原图，不要经过微信QQ等工具发送。
+              </p>
               <p className="text-base-400 text-xs">
-                提示：微信/QQ 等工具发送图片会剥离 EXIF 元数据（含 GPS 经纬度），导致图片丢失拍摄位置信息。
+                提示：微信/QQ 等工具发送图片会剥离 EXIF 元数据（含 GPS
+                经纬度），导致图片丢失拍摄位置信息。
               </p>
             </div>
           }

@@ -11,9 +11,7 @@ let token: string;
 
 describe('管理员登录接口', () => {
   it('正确密码返回 token', async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -23,18 +21,14 @@ describe('管理员登录接口', () => {
   });
 
   it('错误密码返回 401', async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: 'wrong-password' });
+    const res = await request(app).post('/api/admin/login').send({ password: 'wrong-password' });
 
     expect(res.status).toBe(401);
     expect(res.body.success).toBe(false);
   });
 
   it('空密码返回 400', async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: '' });
+    const res = await request(app).post('/api/admin/login').send({ password: '' });
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
@@ -49,9 +43,7 @@ describe('管理员登录接口', () => {
 
 describe('管理员鉴权 - 受保护接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -70,9 +62,7 @@ describe('管理员鉴权 - 受保护接口', () => {
   });
 
   it('正确 Token 可访问 /admin/points', async () => {
-    const res = await request(app)
-      .get('/api/admin/points')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/admin/points').set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -80,9 +70,7 @@ describe('管理员鉴权 - 受保护接口', () => {
   });
 
   it('Authorization 不带 Bearer 前缀返回 403', async () => {
-    const res = await request(app)
-      .get('/api/admin/points')
-      .set('Authorization', token);
+    const res = await request(app).get('/api/admin/points').set('Authorization', token);
 
     expect(res.status).toBe(403);
   });
@@ -90,9 +78,7 @@ describe('管理员鉴权 - 受保护接口', () => {
 
 describe('管理员点位列表筛选', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -128,9 +114,7 @@ describe('管理员点位列表筛选', () => {
   });
 
   it('无 filter 参数默认走 all 分支', async () => {
-    const res = await request(app)
-      .get('/api/admin/points')
-      .set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/admin/points').set('Authorization', `Bearer ${token}`);
 
     expect(res.body.data).toHaveLength(140);
   });
@@ -138,9 +122,7 @@ describe('管理员点位列表筛选', () => {
 
 describe('管理员点位详情接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -177,9 +159,7 @@ describe('管理员点位详情接口', () => {
 
 describe('管理员删除素材接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -219,9 +199,7 @@ describe('管理员删除素材接口', () => {
 
 describe('管理员下载接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -245,9 +223,7 @@ describe('管理员下载接口', () => {
 
 describe('管理员批量下载接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -310,7 +286,9 @@ describe('管理员批量下载接口', () => {
 
   it('ids 参数含 0 或负数时返回 400', async () => {
     const ticket = await getTicket();
-    const res = await request(app).get(`/api/admin/batch-download?type=img&ids=0,5&ticket=${ticket}`);
+    const res = await request(app).get(
+      `/api/admin/batch-download?type=img&ids=0,5&ticket=${ticket}`,
+    );
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
   });
@@ -333,9 +311,7 @@ describe('管理员批量下载接口', () => {
 
 describe('管理员统计表格下载接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -390,7 +366,10 @@ describe('管理员统计表格下载接口', () => {
     expect(headerLine).toContain('最后上传时间');
 
     // 应包含 140 个数据行（去除 BOM 后按 \n 分割，最后一行是空行）
-    const lines = body.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    const lines = body
+      .replace(/^\uFEFF/, '')
+      .split('\n')
+      .filter((l) => l.length > 0);
     expect(lines.length).toBe(1 + 140); // 表头 + 140 行数据
   });
 
@@ -405,9 +384,7 @@ describe('管理员统计表格下载接口', () => {
 
   it('ids 参数含非数字时返回 400', async () => {
     const ticket = await getTicket();
-    const res = await request(app).get(
-      `/api/admin/stats-csv?ids=1,abc,3&ticket=${ticket}`,
-    );
+    const res = await request(app).get(`/api/admin/stats-csv?ids=1,abc,3&ticket=${ticket}`);
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toContain('ids');
@@ -415,20 +392,19 @@ describe('管理员统计表格下载接口', () => {
 
   it('ids 参数含 0 或负数时返回 400', async () => {
     const ticket = await getTicket();
-    const res = await request(app).get(
-      `/api/admin/stats-csv?ids=0,5&ticket=${ticket}`,
-    );
+    const res = await request(app).get(`/api/admin/stats-csv?ids=0,5&ticket=${ticket}`);
     expect(res.status).toBe(400);
   });
 
   it('传入合法 ids 时仅导出指定点位', async () => {
     const ticket = await getTicket();
-    const res = await request(app).get(
-      `/api/admin/stats-csv?ids=1,2,3&ticket=${ticket}`,
-    );
+    const res = await request(app).get(`/api/admin/stats-csv?ids=1,2,3&ticket=${ticket}`);
 
     expect(res.status).toBe(200);
-    const lines = res.text.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    const lines = res.text
+      .replace(/^\uFEFF/, '')
+      .split('\n')
+      .filter((l) => l.length > 0);
     // 表头 + 3 行数据
     expect(lines.length).toBe(1 + 3);
 
@@ -441,9 +417,7 @@ describe('管理员统计表格下载接口', () => {
 
   it('传入全部不存在的 ids 时返回 404', async () => {
     const ticket = await getTicket();
-    const res = await request(app).get(
-      `/api/admin/stats-csv?ids=99999,99998&ticket=${ticket}`,
-    );
+    const res = await request(app).get(`/api/admin/stats-csv?ids=99999,99998&ticket=${ticket}`);
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
   });
@@ -455,7 +429,10 @@ describe('管理员统计表格下载接口', () => {
     const res = await request(app).get(`/api/admin/stats-csv?ticket=${ticket}`);
 
     expect(res.status).toBe(200);
-    const lines = res.text.replace(/^\uFEFF/, '').split('\n').filter((l) => l.length > 0);
+    const lines = res.text
+      .replace(/^\uFEFF/, '')
+      .split('\n')
+      .filter((l) => l.length > 0);
     const headerColCount = lines[0].split(',').length;
 
     // 每行要么字段数与表头一致（无字段含逗号），要么被双引号包裹（含逗号）

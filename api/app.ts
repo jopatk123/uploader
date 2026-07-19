@@ -1,11 +1,7 @@
 /**
  * Express 应用入口
  */
-import express, {
-  type Request,
-  type Response,
-  type NextFunction,
-} from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
@@ -13,14 +9,7 @@ import fse from 'fs-extra';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
-import {
-  db,
-  dbStatus,
-  initDatabase,
-  DATA_DIR,
-  TEMP_CHUNK_DIR,
-  STORAGE_DIR,
-} from './db.js';
+import { db, dbStatus, initDatabase, DATA_DIR, TEMP_CHUNK_DIR, STORAGE_DIR } from './db.js';
 import pointsRoutes from './routes/points.js';
 import uploadRoutes from './routes/upload.js';
 import adminRoutes from './routes/admin.js';
@@ -153,9 +142,7 @@ cron.schedule('0 4 * * 0', async () => {
 
     // 查询 DB 中所有素材路径
     const rows = db
-      .prepare(
-        `SELECT img_path, img_path_alt, video_path, video_path_alt FROM point_material`
-      )
+      .prepare(`SELECT img_path, img_path_alt, video_path, video_path_alt FROM point_material`)
       .all() as Array<Record<string, string | null>>;
 
     const validPaths = new Set<string>();

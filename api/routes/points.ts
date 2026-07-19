@@ -48,14 +48,16 @@ function describePointStatus(hasImage: boolean, hasVideo: boolean): string {
  */
 router.get('/stats-csv', (_req, res) => {
   const rows = db
-    .prepare(`
+    .prepare(
+      `
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
       m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
     FROM point_info p
     LEFT JOIN point_material m ON p.id = m.point_id
     ORDER BY p.id
-  `)
+  `,
+    )
     .all() as Array<{
     id: number;
     city: string;
@@ -75,8 +77,7 @@ router.get('/stats-csv', (_req, res) => {
     const hasImageAlt = !!r.img_path_alt;
     const hasVideo = !!r.video_path;
     const hasVideoAlt = !!r.video_path_alt;
-    const uploadedCount =
-      [hasImage, hasImageAlt, hasVideo, hasVideoAlt].filter(Boolean).length;
+    const uploadedCount = [hasImage, hasImageAlt, hasVideo, hasVideoAlt].filter(Boolean).length;
     return {
       id: r.id,
       city: r.city,
@@ -121,14 +122,18 @@ router.get('/stats-csv', (_req, res) => {
  * 获取全部140个点位列表（含素材上传状态）
  */
 router.get('/', (_req, res) => {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT
       p.id, p.city, p.district, p.lon, p.lat, p.shore_type,
       m.img_path, m.img_path_alt, m.video_path, m.video_path_alt, m.upload_time
     FROM point_info p
     LEFT JOIN point_material m ON p.id = m.point_id
     ORDER BY p.id
-  `).all() as Array<{
+  `,
+    )
+    .all() as Array<{
     id: number;
     city: string;
     district: string;
@@ -142,7 +147,7 @@ router.get('/', (_req, res) => {
     upload_time: string | null;
   }>;
 
-  const points = rows.map(r => ({
+  const points = rows.map((r) => ({
     id: r.id,
     city: r.city,
     district: r.district,

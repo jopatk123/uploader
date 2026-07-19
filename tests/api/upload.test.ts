@@ -19,9 +19,7 @@ function makeFakeImageBuffer(size: number): Buffer {
 
 describe('上传流程 - 分片接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -73,9 +71,7 @@ describe('上传流程 - 分片接口', () => {
 
 describe('上传流程 - 合并接口', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 
@@ -192,9 +188,7 @@ describe('上传流程 - 合并接口', () => {
   });
 
   it('缺少必要参数返回 400', async () => {
-    const res = await request(app)
-      .post('/api/upload/complete')
-      .send({ fileId: 'fid' });
+    const res = await request(app).post('/api/upload/complete').send({ fileId: 'fid' });
 
     expect(res.status).toBe(400);
   });
@@ -397,9 +391,7 @@ describe('上传流程 - 合并接口', () => {
 
 describe('上传流程 - 多分片视频合并', () => {
   beforeAll(async () => {
-    const res = await request(app)
-      .post('/api/admin/login')
-      .send({ password: ADMIN_PASSWORD });
+    const res = await request(app).post('/api/admin/login').send({ password: ADMIN_PASSWORD });
     token = res.body.data.token;
   });
 

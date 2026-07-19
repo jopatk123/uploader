@@ -19,9 +19,7 @@ export function isDurationValid(duration: number): boolean {
  *
  * @returns 校验结果：ok 表示是否通过，duration 为视频时长（秒）
  */
-export async function checkVideoDuration(
-  file: File
-): Promise<{ ok: boolean; duration: number }> {
+export async function checkVideoDuration(file: File): Promise<{ ok: boolean; duration: number }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');

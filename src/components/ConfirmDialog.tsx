@@ -27,7 +27,7 @@ export default function ConfirmDialog({
     >
       <div
         className="bg-base-700 border border-base-600 rounded-lg p-6 max-w-md w-full mx-4 animate-slide-up"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <h3 className="font-mono text-lg text-base-100 mb-3">{title}</h3>
         <div className="text-sm text-base-200 mb-6">{message}</div>

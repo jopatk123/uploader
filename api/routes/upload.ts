@@ -121,7 +121,9 @@ router.post('/chunk', upload.single('chunk'), (req, res) => {
   const ext = path.extname(fileName).toLowerCase();
   const allowedExts = isImageType(type) ? IMAGE_EXTS : VIDEO_EXTS;
   if (!allowedExts.includes(ext)) {
-    res.status(400).json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
+    res
+      .status(400)
+      .json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
     return;
   }
 
@@ -204,7 +206,9 @@ router.post('/complete', async (req, res) => {
   const ext = path.extname(fileName).toLowerCase();
   const allowedExts = isImageType(type) ? IMAGE_EXTS : VIDEO_EXTS;
   if (!allowedExts.includes(ext)) {
-    res.status(400).json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
+    res
+      .status(400)
+      .json({ success: false, error: `文件后缀不允许，仅支持 ${allowedExts.join(', ')}` });
     return;
   }
 
@@ -223,8 +227,9 @@ router.post('/complete', async (req, res) => {
   }
 
   // 读取所有分片并按序号排序
-  const chunkFiles = fs.readdirSync(chunkDir)
-    .filter(f => f.match(/^chunk-\d+$/))
+  const chunkFiles = fs
+    .readdirSync(chunkDir)
+    .filter((f) => f.match(/^chunk-\d+$/))
     .sort((a, b) => {
       const ai = parseInt(a.match(/^chunk-(\d+)$/)![1]);
       const bi = parseInt(b.match(/^chunk-(\d+)$/)![1]);
@@ -342,17 +347,19 @@ router.post('/complete', async (req, res) => {
     // better-sqlite3 同步执行 + transaction 保证查询+更新的原子性
     // 即使此处崩溃，最坏情况是新文件成孤儿，旧文件仍可访问，数据库一致性不受影响
     const { oldPath } = db.transaction(() => {
-      const row = db.prepare(
-        `SELECT ${column} AS old_path FROM point_material WHERE point_id = ?`
-      ).get(pointId) as { old_path: string | null } | undefined;
+      const row = db
+        .prepare(`SELECT ${column} AS old_path FROM point_material WHERE point_id = ?`)
+        .get(pointId) as { old_path: string | null } | undefined;
 
       const old = row?.old_path ?? null;
 
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE point_material
         SET ${column} = ?, upload_time = datetime('now')
         WHERE point_id = ?
-      `).run(relPath, pointId);
+      `,
+      ).run(relPath, pointId);
 
       return { oldPath: old };
     })();

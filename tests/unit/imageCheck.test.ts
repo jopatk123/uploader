@@ -242,18 +242,22 @@ describe('imageCheck 工具函数', () => {
 
     it('10% 阈值边界：12 像素中 1 黑（8.3%）通过，2 黑（16.7%）不通过', () => {
       // 模拟 12 像素中 1 个纯黑
-      const pixels1: Array<[number, number, number, number]> = Array(11).fill([255, 255, 255, 255]) as Array<[number, number, number, number]>;
+      const pixels1: Array<[number, number, number, number]> = Array(11).fill([
+        255, 255, 255, 255,
+      ]) as Array<[number, number, number, number]>;
       pixels1.push([0, 0, 0, 255]);
       expect(countBlackPixels(makeRgba(pixels1)).ratio).toBeLessThanOrEqual(MAX_BLACK_RATIO);
 
       // 模拟 12 像素中 2 个纯黑
-      const pixels2: Array<[number, number, number, number]> = Array(10).fill([255, 255, 255, 255]) as Array<[number, number, number, number]>;
+      const pixels2: Array<[number, number, number, number]> = Array(10).fill([
+        255, 255, 255, 255,
+      ]) as Array<[number, number, number, number]>;
       pixels2.push([0, 0, 0, 255], [0, 0, 0, 255]);
       expect(countBlackPixels(makeRgba(pixels2)).ratio).toBeGreaterThan(MAX_BLACK_RATIO);
     });
 
     it('常量值正确', () => {
-      expect(MAX_BLACK_RATIO).toBe(0.10);
+      expect(MAX_BLACK_RATIO).toBe(0.1);
       expect(BLACK_THRESHOLD).toBe(0);
     });
 

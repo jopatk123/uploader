@@ -16,14 +16,14 @@
 
 ## 技术栈
 
-| 层 | 技术 |
-|----|------|
-| 前端 | React 18 + Tailwind CSS 3 + Vite 6 + zustand |
-| 后端 | Node.js 22 + Express 4 + better-sqlite3 |
-| 数据库 | SQLite（WAL 模式） |
-| 鉴权 | JWT（管理后台） |
-| 文件上传 | multer（memoryStorage） + 分片上传 |
-| 部署 | Docker + docker-compose |
+| 层       | 技术                                         |
+| -------- | -------------------------------------------- |
+| 前端     | React 18 + Tailwind CSS 3 + Vite 6 + zustand |
+| 后端     | Node.js 22 + Express 4 + better-sqlite3      |
+| 数据库   | SQLite（WAL 模式）                           |
+| 鉴权     | JWT（管理后台）                              |
+| 文件上传 | multer（memoryStorage） + 分片上传           |
+| 部署     | Docker + docker-compose                      |
 
 ## 本地开发
 
@@ -77,14 +77,14 @@ rm -rf data/
 
 ## 配置说明（.env）
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| PORT | 后端服务端口（容器内） | 3001 |
-| DOCKER_PORT | Docker 对外端口 | 15000 |
-| ADMIN_PASSWORD | 管理员密码 | 123456 |
-| JWT_SECRET | JWT 密钥 | uploader-secret-key-2024 |
-| CHUNK_SIZE | 分片大小（MB） | 5 |
-| DATA_DIR | 数据存储目录（Docker 挂载） | /app/data |
+| 变量           | 说明                        | 默认值                   |
+| -------------- | --------------------------- | ------------------------ |
+| PORT           | 后端服务端口（容器内）      | 3001                     |
+| DOCKER_PORT    | Docker 对外端口             | 15000                    |
+| ADMIN_PASSWORD | 管理员密码                  | 123456                   |
+| JWT_SECRET     | JWT 密钥                    | uploader-secret-key-2024 |
+| CHUNK_SIZE     | 分片大小（MB）              | 5                        |
+| DATA_DIR       | 数据存储目录（Docker 挂载） | /app/data                |
 
 ## 数据目录
 
@@ -120,6 +120,7 @@ tests/                # 测试用例（Vitest）
 ## CI/CD
 
 GitHub Actions 配置在 `.github/workflows/ci.yml`，每次提交自动执行：
+
 - 类型检查（tsc --noEmit）
 - ESLint 检查
 - 单元 + 接口测试

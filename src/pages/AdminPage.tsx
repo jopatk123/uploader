@@ -250,9 +250,7 @@ export default function AdminPage() {
       hasVideo: points.filter((p) => p.has_video).length,
       hasVideoAlt: points.filter((p) => p.has_video_alt).length,
       completed: points.filter((p) => p.has_image && p.has_video).length,
-      partial: points.filter(
-        (p) => getPointState(p.has_image, p.has_video) === 'partial',
-      ).length,
+      partial: points.filter((p) => getPointState(p.has_image, p.has_video) === 'partial').length,
     }),
     [points],
   );

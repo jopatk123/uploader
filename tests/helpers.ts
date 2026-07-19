@@ -15,7 +15,7 @@ import zlib from 'zlib';
 export function makePngBuffer(
   width: number,
   height: number,
-  pixelFn: (x: number, y: number) => number = (x, y) => (x + y) % 256
+  pixelFn: (x: number, y: number) => number = (x, y) => (x + y) % 256,
 ): Buffer {
   // PNG 签名
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -155,7 +155,13 @@ const TIFF_IFD_ENTRY_SIZE = 12;
 /**
  * 构造一个 IFD 入口（12 字节）
  */
-function makeTiffIfdEntry(tag: number, type: number, count: number, value: number, littleEndian: boolean): Buffer {
+function makeTiffIfdEntry(
+  tag: number,
+  type: number,
+  count: number,
+  value: number,
+  littleEndian: boolean,
+): Buffer {
   const buf = Buffer.alloc(TIFF_IFD_ENTRY_SIZE);
   if (littleEndian) {
     buf.writeUInt16LE(tag, 0);
@@ -230,7 +236,7 @@ function makeTiffData(options: { gpsTags?: number[]; littleEndian?: boolean } = 
     const gpsCountBuf = Buffer.alloc(2);
     if (littleEndian) gpsCountBuf.writeUInt16LE(gpsTags.length, 0);
     else gpsCountBuf.writeUInt16BE(gpsTags.length, 0);
-    const gpsEntries = gpsTags.map(tag => makeTiffIfdEntry(tag, 5, 1, 0, littleEndian)); // type=5 RATIONAL
+    const gpsEntries = gpsTags.map((tag) => makeTiffIfdEntry(tag, 5, 1, 0, littleEndian)); // type=5 RATIONAL
     gpsIfdBuf = Buffer.concat([
       gpsCountBuf,
       ...gpsEntries,

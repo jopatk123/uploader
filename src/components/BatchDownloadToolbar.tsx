@@ -58,9 +58,7 @@ export default function BatchDownloadToolbar({
   // 在"全部"模式下，统计全部已上传该类型素材的数量
   const countFor = (type: MaterialType): number => {
     const key = HAS_KEY[type];
-    const pool = hasSelection
-      ? points.filter((p) => selectedIds.has(p.id))
-      : points;
+    const pool = hasSelection ? points.filter((p) => selectedIds.has(p.id)) : points;
     return pool.filter((p) => p[key]).length;
   };
 
@@ -89,9 +87,7 @@ export default function BatchDownloadToolbar({
         >
           反选
         </button>
-        <span
-          className={`text-xs font-mono ${hasSelection ? 'text-accent' : 'text-base-400'}`}
-        >
+        <span className={`text-xs font-mono ${hasSelection ? 'text-accent' : 'text-base-400'}`}>
           {hasSelection
             ? `已选 ${selectedIds.size} / ${points.length} 个点位（仅下载选中）`
             : `共 ${points.length} 个点位（将下载全部）`}
@@ -112,23 +108,17 @@ export default function BatchDownloadToolbar({
           return (
             <button
               key={bt.type}
-              onClick={() =>
-                onDownload(bt.type, hasSelection ? selectedIdsArr : undefined)
-              }
+              onClick={() => onDownload(bt.type, hasSelection ? selectedIdsArr : undefined)}
               disabled={downloading !== null || count === 0}
               title={
-                hasSelection
-                  ? `仅下载选中点位中已上传的${bt.label}`
-                  : `下载全部已上传的${bt.label}`
+                hasSelection ? `仅下载选中点位中已上传的${bt.label}` : `下载全部已上传的${bt.label}`
               }
               className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 ${colorClass}`}
             >
               {isDownloading && (
                 <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
               )}
-              {isDownloading
-                ? `打包${bt.shortLabel}中...`
-                : `${labelPrefix}${bt.label} (${count})`}
+              {isDownloading ? `打包${bt.shortLabel}中...` : `${labelPrefix}${bt.label} (${count})`}
             </button>
           );
         })}

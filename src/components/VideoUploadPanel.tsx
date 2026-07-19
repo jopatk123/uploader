@@ -76,7 +76,7 @@ export default function VideoUploadPanel({
       const { ok, duration } = await checkVideoDuration(selected);
       if (!ok) {
         setError(
-          `视频时长必须 ≥ ${MIN_VIDEO_DURATION} 秒才能上传，当前时长 ${duration.toFixed(1)} 秒`
+          `视频时长必须 ≥ ${MIN_VIDEO_DURATION} 秒才能上传，当前时长 ${duration.toFixed(1)} 秒`,
         );
         return;
       }
@@ -103,13 +103,8 @@ export default function VideoUploadPanel({
       setError(null);
 
       const fileId = generateFileId(originalFile);
-      await uploadFile(
-        originalFile,
-        originalFile.name,
-        pointId,
-        type,
-        fileId,
-        (progress) => setUploadProgress(progress)
+      await uploadFile(originalFile, originalFile.name, pointId, type, fileId, (progress) =>
+        setUploadProgress(progress),
       );
 
       setSuccess(true);
@@ -135,7 +130,9 @@ export default function VideoUploadPanel({
   const successText = isAlt ? '备选视频上传成功' : '视频上传成功';
 
   return (
-    <div className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}>
+    <div
+      className={`bg-base-700 border border-base-600 rounded-lg p-5 ${disabled ? 'opacity-50' : ''}`}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-mono text-sm text-base-100 flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${accentColor}`}></span>
@@ -164,9 +161,10 @@ export default function VideoUploadPanel({
         htmlFor={disabled || isUploading ? '' : inputId}
         className={`
           block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
-          ${disabled || isUploading
-            ? 'border-base-600 cursor-not-allowed'
-            : `border-base-500 ${borderColor} hover:bg-base-600/30`
+          ${
+            disabled || isUploading
+              ? 'border-base-600 cursor-not-allowed'
+              : `border-base-500 ${borderColor} hover:bg-base-600/30`
           }
         `}
       >
@@ -186,10 +184,7 @@ export default function VideoUploadPanel({
       {/* 上传进度 */}
       {uploadProgress && (
         <div className="mt-4">
-          <ProgressBar
-            percent={uploadProgress.percent}
-            label={uploadProgress.message}
-          />
+          <ProgressBar percent={uploadProgress.percent} label={uploadProgress.message} />
         </div>
       )}
 

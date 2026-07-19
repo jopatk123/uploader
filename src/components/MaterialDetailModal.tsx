@@ -25,10 +25,22 @@ const MATERIAL_META: {
   hasKey: 'has_image' | 'has_image_alt' | 'has_video' | 'has_video_alt';
   isImage: boolean;
 }[] = [
-  { type: 'img',      title: '主图片',   pathKey: 'img_path',      hasKey: 'has_image',      isImage: true },
-  { type: 'img_alt',  title: '备选图片', pathKey: 'img_path_alt',  hasKey: 'has_image_alt',  isImage: true },
-  { type: 'video',    title: '主视频',   pathKey: 'video_path',    hasKey: 'has_video',      isImage: false },
-  { type: 'video_alt',title: '备选视频', pathKey: 'video_path_alt',hasKey: 'has_video_alt',  isImage: false },
+  { type: 'img', title: '主图片', pathKey: 'img_path', hasKey: 'has_image', isImage: true },
+  {
+    type: 'img_alt',
+    title: '备选图片',
+    pathKey: 'img_path_alt',
+    hasKey: 'has_image_alt',
+    isImage: true,
+  },
+  { type: 'video', title: '主视频', pathKey: 'video_path', hasKey: 'has_video', isImage: false },
+  {
+    type: 'video_alt',
+    title: '备选视频',
+    pathKey: 'video_path_alt',
+    hasKey: 'has_video_alt',
+    isImage: false,
+  },
 ];
 
 export default function MaterialDetailModal({ point, onClose, onChanged }: Props) {
@@ -62,7 +74,7 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
    * 加载所有已上传图片的 blob URL，在组件卸载或点位变化时自动 revoke
    */
   useEffect(() => {
-    const imageMeta = MATERIAL_META.filter(m => m.isImage && point[m.hasKey] && point[m.pathKey]);
+    const imageMeta = MATERIAL_META.filter((m) => m.isImage && point[m.hasKey] && point[m.pathKey]);
     if (imageMeta.length === 0) return;
 
     let cancelled = false;
@@ -99,7 +111,7 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
   }, [point, loadImageBlob]);
 
   const handleDownload = async (type: MaterialType) => {
-    const meta = MATERIAL_META.find(m => m.type === type)!;
+    const meta = MATERIAL_META.find((m) => m.type === type)!;
     const filePath = point[meta.pathKey];
     const ext = filePath ? filePath.substring(filePath.lastIndexOf('.')) : '';
 
@@ -136,7 +148,7 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
     >
       <div
         className="bg-base-700 border border-base-600 rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-slide-up"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* 头部 */}
         <div className="flex items-center justify-between p-5 border-b border-base-600 sticky top-0 bg-base-700 z-10">
@@ -163,23 +175,24 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
             </div>
           )}
 
-          {MATERIAL_META.map(meta => {
+          {MATERIAL_META.map((meta) => {
             const has = point[meta.hasKey];
             const path = point[meta.pathKey];
             const isAlt = meta.type.endsWith('_alt');
             const accentText = isAlt ? 'text-status-yellow' : 'text-accent';
 
             return (
-              <div
-                key={meta.type}
-                className="bg-base-800 border border-base-600 rounded-lg p-4"
-              >
+              <div key={meta.type} className="bg-base-800 border border-base-600 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-mono text-sm text-base-100 flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${isAlt ? 'bg-status-yellow' : 'bg-accent'}`}></span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${isAlt ? 'bg-status-yellow' : 'bg-accent'}`}
+                    ></span>
                     {meta.title}
                   </h4>
-                  <span className={`text-xs font-mono ${has ? 'text-status-green' : 'text-status-red'}`}>
+                  <span
+                    className={`text-xs font-mono ${has ? 'text-status-green' : 'text-status-red'}`}
+                  >
                     {has ? '已上传' : '未上传'}
                   </span>
                 </div>
@@ -188,7 +201,10 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
                   <div className="space-y-3">
                     {/* 图片预览（通过 blob URL 展示受鉴权保护的图片） */}
                     {meta.isImage && (
-                      <div className="bg-base-900 rounded-lg overflow-hidden flex items-center justify-center" style={{ maxHeight: '260px' }}>
+                      <div
+                        className="bg-base-900 rounded-lg overflow-hidden flex items-center justify-center"
+                        style={{ maxHeight: '260px' }}
+                      >
                         {imageUrls[meta.type] ? (
                           <img
                             src={imageUrls[meta.type]}
@@ -199,7 +215,9 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
                         ) : imageErrors[meta.type] ? (
                           <div className="text-sm text-status-red py-8">图片加载失败</div>
                         ) : (
-                          <div className="text-sm text-base-400 py-8 animate-pulse">加载图片中...</div>
+                          <div className="text-sm text-base-400 py-8 animate-pulse">
+                            加载图片中...
+                          </div>
                         )}
                       </div>
                     )}
@@ -243,7 +261,7 @@ export default function MaterialDetailModal({ point, onClose, onChanged }: Props
       {deleteConfirm && (
         <ConfirmDialog
           title="确认删除素材"
-          message={`确定删除点位 #${point.id} 的${MATERIAL_META.find(m => m.type === deleteConfirm)!.title}素材吗？此操作不可撤销。`}
+          message={`确定删除点位 #${point.id} 的${MATERIAL_META.find((m) => m.type === deleteConfirm)!.title}素材吗？此操作不可撤销。`}
           confirmText="确认删除"
           onConfirm={() => {
             handleDelete(deleteConfirm);

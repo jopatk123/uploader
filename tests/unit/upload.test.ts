@@ -48,7 +48,7 @@ describe('upload 工具函数', () => {
       });
 
       const progresses: { phase: string; percent: number }[] = [];
-      await uploadFile(blob, 'test.mp4', 1, 'video', 'fid', p => {
+      await uploadFile(blob, 'test.mp4', 1, 'video', 'fid', (p) => {
         progresses.push({ phase: p.phase, percent: p.percent });
       });
 
@@ -66,9 +66,9 @@ describe('upload 工具函数', () => {
         json: async () => ({ error: '磁盘已满' }),
       });
 
-      await expect(
-        uploadFile(blob, 'test.mp4', 1, 'video', 'fid', () => {}),
-      ).rejects.toThrow('磁盘已满');
+      await expect(uploadFile(blob, 'test.mp4', 1, 'video', 'fid', () => {})).rejects.toThrow(
+        '磁盘已满',
+      );
     });
 
     it('合并失败抛错', async () => {
@@ -80,9 +80,9 @@ describe('upload 工具函数', () => {
         json: async () => ({ success: false, error: '合并失败' }),
       });
 
-      await expect(
-        uploadFile(blob, 'test.mp4', 1, 'video', 'fid', () => {}),
-      ).rejects.toThrow('合并失败');
+      await expect(uploadFile(blob, 'test.mp4', 1, 'video', 'fid', () => {})).rejects.toThrow(
+        '合并失败',
+      );
     });
   });
 });

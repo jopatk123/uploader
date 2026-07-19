@@ -22,7 +22,7 @@ export function isPanoramicRatio(width: number, height: number): boolean {
  * @returns 校验结果：ok 表示是否通过，width/height 为图片原始尺寸
  */
 export async function checkPanoramic(
-  file: File
+  file: File,
 ): Promise<{ ok: boolean; width: number; height: number }> {
   // 优先使用 createImageBitmap（性能好，不污染 DOM）
   if (typeof createImageBitmap === 'function') {
@@ -43,7 +43,11 @@ export async function checkPanoramic(
     img.onload = () => {
       const { naturalWidth, naturalHeight } = img;
       URL.revokeObjectURL(url);
-      resolve({ ok: isPanoramicRatio(naturalWidth, naturalHeight), width: naturalWidth, height: naturalHeight });
+      resolve({
+        ok: isPanoramicRatio(naturalWidth, naturalHeight),
+        width: naturalWidth,
+        height: naturalHeight,
+      });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -72,11 +76,7 @@ const EXIF_GPS_TAG_LONGITUDE = 0x0004;
 /** 文件名/MIME 看起来像 JPEG */
 function looksLikeJpeg(file: File): boolean {
   const lower = file.name.toLowerCase();
-  return (
-    lower.endsWith('.jpg') ||
-    lower.endsWith('.jpeg') ||
-    file.type === 'image/jpeg'
-  );
+  return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || file.type === 'image/jpeg';
 }
 
 /**
@@ -210,7 +210,7 @@ function checkGpsInTiff(view: DataView, tiffOffset: number): boolean {
 // - "纯黑"严格定义为 RGB(0,0,0)；提供 BLACK_THRESHOLD 常量便于后续放宽到近黑
 
 /** 纯黑像素占比上限（超过则拒绝上传） */
-export const MAX_BLACK_RATIO = 0.10;
+export const MAX_BLACK_RATIO = 0.1;
 
 /** "纯黑"判定阈值：三通道 RGB 值均 ≤ 此值视为纯黑（默认 0 = 严格 RGB(0,0,0)） */
 export const BLACK_THRESHOLD = 0;
@@ -228,7 +228,7 @@ export const BLACK_THRESHOLD = 0;
  */
 export function countBlackPixels(
   data: Uint8ClampedArray | Uint8Array,
-  threshold: number = BLACK_THRESHOLD
+  threshold: number = BLACK_THRESHOLD,
 ): { black: number; total: number; ratio: number } {
   const total = Math.floor(data.length / 4);
   if (total === 0) return { black: 0, total: 0, ratio: 0 };
@@ -267,7 +267,7 @@ const BLACK_CHECK_MAX_DIMENSION = 2048;
  *   - sampledPixels: 采样像素总数（降采样后）
  */
 export async function checkBlackPixelRatio(
-  file: File
+  file: File,
 ): Promise<{ ok: boolean; ratio: number; sampledPixels: number }> {
   try {
     const bitmap = await loadBitmapForSampling(file);
@@ -308,9 +308,7 @@ export async function checkBlackPixelRatio(
  * 加载图片为 ImageBitmap 或 HTMLImageElement，供 Canvas 绘制使用
  * 优先用 createImageBitmap（性能更好），失败时回退到 Image + createObjectURL
  */
-async function loadBitmapForSampling(
-  file: File
-): Promise<ImageBitmap | HTMLImageElement> {
+async function loadBitmapForSampling(file: File): Promise<ImageBitmap | HTMLImageElement> {
   if (typeof createImageBitmap === 'function') {
     try {
       return await createImageBitmap(file);

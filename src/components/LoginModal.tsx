@@ -46,15 +46,13 @@ export default function LoginModal({ onLogin }: Props) {
           <input
             type="password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="管理密码"
             autoFocus
             className="w-full bg-base-800 border border-base-600 rounded px-3 py-2.5 text-sm text-base-100 focus:border-accent focus:outline-none font-mono mb-3"
           />
 
-          {error && (
-            <div className="text-sm text-status-red mb-3">{error}</div>
-          )}
+          {error && <div className="text-sm text-status-red mb-3">{error}</div>}
 
           <button
             type="submit"

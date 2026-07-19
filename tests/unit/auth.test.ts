@@ -9,9 +9,8 @@ import jwt from 'jsonwebtoken';
 process.env.ADMIN_PASSWORD = '123456';
 process.env.JWT_SECRET = 'test-secret-key';
 
-const { generateToken, verifyPassword, authMiddleware } = await import(
-  '../../api/middleware/auth.js'
-);
+const { generateToken, verifyPassword, authMiddleware } =
+  await import('../../api/middleware/auth.js');
 
 describe('auth middleware', () => {
   describe('verifyPassword', () => {
@@ -40,7 +39,7 @@ describe('auth middleware', () => {
 
     it('不同次调用生成不同 token（iat 不同）', async () => {
       const t1 = generateToken();
-      await new Promise(r => setTimeout(r, 1100));
+      await new Promise((r) => setTimeout(r, 1100));
       const t2 = generateToken();
       expect(t1).not.toBe(t2);
     });

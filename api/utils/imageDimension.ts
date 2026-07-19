@@ -63,8 +63,14 @@ function parseFromBuffer(buf: Buffer): ImageDimension | null {
 
   // WEBP: RIFF....WEBP
   if (
-    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && // RIFF
-    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50    // WEBP
+    buf[0] === 0x52 &&
+    buf[1] === 0x49 &&
+    buf[2] === 0x46 &&
+    buf[3] === 0x46 && // RIFF
+    buf[8] === 0x57 &&
+    buf[9] === 0x45 &&
+    buf[10] === 0x42 &&
+    buf[11] === 0x50 // WEBP
   ) {
     return parseWebp(buf);
   }
@@ -150,8 +156,8 @@ function parseWebp(buf: Buffer): ImageDimension | null {
     const b1 = buf[22];
     const b2 = buf[23];
     const b3 = buf[24];
-    const width = 1 + ((b1 & 0x3f) << 8 | b0);
-    const height = 1 + ((b3 & 0x0f) << 10 | b2 << 2 | (b1 & 0xc0) >> 6);
+    const width = 1 + (((b1 & 0x3f) << 8) | b0);
+    const height = 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6));
     return { width, height };
   }
 

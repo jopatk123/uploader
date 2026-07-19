@@ -8,9 +8,10 @@ interface Props {
 }
 
 export default function ProgressBar({ percent, label, variant = 'default' }: Props) {
-  const fillColor = variant === 'compress'
-    ? 'linear-gradient(90deg, #f59e0b, #d97706)'
-    : 'linear-gradient(90deg, #00d4ff, #0099cc)';
+  const fillColor =
+    variant === 'compress'
+      ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+      : 'linear-gradient(90deg, #00d4ff, #0099cc)';
 
   return (
     <div className="w-full">

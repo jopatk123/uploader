@@ -6,7 +6,13 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { db, STORAGE_DIR } from '../db.js';
-import { authMiddleware, ticketMiddleware, generateToken, verifyPassword, generateDownloadTicket } from '../middleware/auth.js';
+import {
+  authMiddleware,
+  ticketMiddleware,
+  generateToken,
+  verifyPassword,
+  generateDownloadTicket,
+} from '../middleware/auth.js';
 import { formatBeijingTime, beijingTimestamp } from '../utils/time.js';
 
 const router = Router();
@@ -57,7 +63,10 @@ router.post('/login', (req, res) => {
 function parseIdsParam(raw: unknown): number[] | null {
   if (raw === undefined || raw === null || raw === '') return null;
   if (typeof raw !== 'string') return null;
-  const parts = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  const parts = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
   if (parts.length === 0) return null;
   const ids: number[] = [];
   for (const p of parts) {
@@ -185,8 +194,7 @@ router.get('/stats-csv', ticketMiddleware, (req, res) => {
     const hasImageAlt = !!r.img_path_alt;
     const hasVideo = !!r.video_path;
     const hasVideoAlt = !!r.video_path_alt;
-    const uploadedCount =
-      [hasImage, hasImageAlt, hasVideo, hasVideoAlt].filter(Boolean).length;
+    const uploadedCount = [hasImage, hasImageAlt, hasVideo, hasVideoAlt].filter(Boolean).length;
     return {
       id: r.id,
       city: r.city,
@@ -626,9 +634,22 @@ router.delete('/material/:id', (req, res) => {
       .prepare(
         `SELECT img_path, img_path_alt, video_path, video_path_alt FROM point_material WHERE point_id = ?`,
       )
-      .get(pointId) as { img_path: string | null; img_path_alt: string | null; video_path: string | null; video_path_alt: string | null } | undefined;
+      .get(pointId) as
+      | {
+          img_path: string | null;
+          img_path_alt: string | null;
+          video_path: string | null;
+          video_path_alt: string | null;
+        }
+      | undefined;
 
-    if (remaining && !remaining.img_path && !remaining.img_path_alt && !remaining.video_path && !remaining.video_path_alt) {
+    if (
+      remaining &&
+      !remaining.img_path &&
+      !remaining.img_path_alt &&
+      !remaining.video_path &&
+      !remaining.video_path_alt
+    ) {
       db.prepare(`UPDATE point_material SET upload_time = NULL WHERE point_id = ?`).run(pointId);
     }
   })();
