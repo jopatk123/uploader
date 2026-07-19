@@ -15,6 +15,7 @@ export default function UploadPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string; callback: () => void } | null>(null);
   const [showOverLimit, setShowOverLimit] = useState(false);
+  const [showNoGpsWarning, setShowNoGpsWarning] = useState(false);
   const [statsDownloading, setStatsDownloading] = useState(false);
 
   const loadPoints = useCallback(async () => {
@@ -179,6 +180,7 @@ export default function UploadPage() {
               hasExisting={!!selectedPoint?.has_image}
               onUploadComplete={loadPoints}
               onNeedConfirm={handleNeedConfirm}
+              onMissingGps={() => setShowNoGpsWarning(true)}
               type="img"
             />
             <ImageUploadPanel
@@ -187,6 +189,7 @@ export default function UploadPage() {
               hasExisting={!!selectedPoint?.has_image_alt}
               onUploadComplete={loadPoints}
               onNeedConfirm={handleNeedConfirm}
+              onMissingGps={() => setShowNoGpsWarning(true)}
               type="img_alt"
             />
             <VideoUploadPanel
@@ -243,6 +246,25 @@ export default function UploadPage() {
           cancelText="关闭"
           onConfirm={() => setShowOverLimit(false)}
           onCancel={() => setShowOverLimit(false)}
+        />
+      )}
+
+      {/* 图片无 GPS 经纬度提示弹窗 */}
+      {showNoGpsWarning && (
+        <ConfirmDialog
+          title="图片未含经纬度信息"
+          message={
+            <div className="space-y-2">
+              <p>你上传的图片不含经纬度信息，请尽量上传无人机导出的原图，不要经过微信QQ等工具发送。</p>
+              <p className="text-base-400 text-xs">
+                提示：微信/QQ 等工具发送图片会剥离 EXIF 元数据（含 GPS 经纬度），导致图片丢失拍摄位置信息。
+              </p>
+            </div>
+          }
+          confirmText="我知道了"
+          cancelText="关闭"
+          onConfirm={() => setShowNoGpsWarning(false)}
+          onCancel={() => setShowNoGpsWarning(false)}
         />
       )}
     </div>

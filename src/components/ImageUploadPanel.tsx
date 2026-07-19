@@ -8,13 +8,18 @@ import { useState, useRef, useEffect } from 'react';
 import ProgressBar from '@/components/ProgressBar';
 import { uploadFile, generateFileId, type UploadProgress } from '@/lib/upload';
 import { compressImageIfNeeded, shouldCompress } from '@/lib/imageCompress';
-import { checkPanoramic } from '@/lib/imageCheck';
+import { checkPanoramic, hasGpsExif } from '@/lib/imageCheck';
 
 interface Props {
   pointId: number | null;
   hasExisting: boolean;
   onUploadComplete: () => void;
   onNeedConfirm: (callback: () => void) => void;
+  /**
+   * 上传成功但图片不含 EXIF GPS 经纬度信息时触发
+   * （仅对 JPEG 文件检测；用于提示用户上传无人机原片）
+   */
+  onMissingGps?: () => void;
   /** 素材类型：主图 img（默认）/ 备选图 img_alt */
   type?: 'img' | 'img_alt';
 }
@@ -26,6 +31,7 @@ export default function ImageUploadPanel({
   hasExisting,
   onUploadComplete,
   onNeedConfirm,
+  onMissingGps,
   type = 'img',
 }: Props) {
   const isAlt = type === 'img_alt';
@@ -94,6 +100,10 @@ export default function ImageUploadPanel({
       setSuccess(false);
       setError(null);
 
+      // 在压缩/上传之前并行检测 EXIF GPS（不阻塞流程）
+      // 仅 JPEG 会被检测；PNG/WEBP 检测函数直接返回 false
+      const gpsCheckPromise = hasGpsExif(originalFile).catch(() => false);
+
       // 超过 10MB 的图片先压缩，尽量保留 EXIF 元数据
       let fileToUpload = originalFile;
       if (shouldCompress(originalFile)) {
@@ -121,6 +131,12 @@ export default function ImageUploadPanel({
       setFile(null);
       if (inputRef.current) inputRef.current.value = '';
       onUploadComplete();
+
+      // 上传成功后，若图片不含 GPS，弹出提示
+      const hasGps = await gpsCheckPromise;
+      if (!hasGps) {
+        onMissingGps?.();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     }
