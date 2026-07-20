@@ -31,12 +31,12 @@ describe('getPointState 点位状态判定', () => {
     expect(getPointState(true, true)).toBe('complete');
   });
 
-  it('仅上传主图 → partial', () => {
-    expect(getPointState(true, false)).toBe('partial');
+  it('仅上传主图 → complete（至少一项即为完成）', () => {
+    expect(getPointState(true, false)).toBe('complete');
   });
 
-  it('仅上传主视频 → partial', () => {
-    expect(getPointState(false, true)).toBe('partial');
+  it('仅上传主视频 → complete（至少一项即为完成）', () => {
+    expect(getPointState(false, true)).toBe('complete');
   });
 
   it('均未上传 → empty', () => {

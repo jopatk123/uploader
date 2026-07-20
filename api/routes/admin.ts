@@ -125,8 +125,7 @@ function escapeCsvCell(value: unknown): string {
  * 依据主图/主视频上传情况判定完成状态文案（与前端 getPointState 语义一致）
  */
 function describePointStatus(hasImage: boolean, hasVideo: boolean): string {
-  if (hasImage && hasVideo) return '已完成（主图+主视频）';
-  if (hasImage || hasVideo) return '部分完成';
+  if (hasImage || hasVideo) return '已完成';
   return '未上传';
 }
 
@@ -437,7 +436,7 @@ router.get('/points', (req, res) => {
   } else if (filter === 'video_only') {
     whereClause = 'WHERE m.img_path IS NULL AND m.video_path IS NOT NULL';
   } else if (filter === 'completed') {
-    whereClause = 'WHERE m.img_path IS NOT NULL AND m.video_path IS NOT NULL';
+    whereClause = 'WHERE m.img_path IS NOT NULL OR m.video_path IS NOT NULL';
   }
 
   const rows = db

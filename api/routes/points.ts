@@ -36,8 +36,7 @@ function escapeCsvCell(value: unknown): string {
 }
 
 function describePointStatus(hasImage: boolean, hasVideo: boolean): string {
-  if (hasImage && hasVideo) return '已完成（主图+主视频）';
-  if (hasImage || hasVideo) return '部分完成';
+  if (hasImage || hasVideo) return '已完成';
   return '未上传';
 }
 

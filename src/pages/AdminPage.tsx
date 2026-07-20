@@ -18,7 +18,7 @@ import {
   clearToken,
 } from '@/lib/api';
 import type { PointStatus, PointDetail, MaterialType } from '@/types';
-import { getPointState, formatBeijingTime } from '@/lib/utils';
+import { formatBeijingTime } from '@/lib/utils';
 
 type FilterType = 'all' | 'img_only' | 'video_only' | 'completed';
 
@@ -26,7 +26,7 @@ const FILTERS: { value: FilterType; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'img_only', label: '仅传图' },
   { value: 'video_only', label: '仅传视频' },
-  { value: 'completed', label: '主图+主视频' },
+  { value: 'completed', label: '已完成' },
 ];
 
 /** MaterialType → has_xxx 字段名（用于按类型统计已上传数量） */
@@ -129,7 +129,7 @@ export default function AdminPage() {
     if (filter === 'video_only')
       return points.filter((p) => !p.has_image && p.has_video);
     if (filter === 'completed')
-      return points.filter((p) => p.has_image && p.has_video);
+      return points.filter((p) => p.has_image || p.has_video);
     return points;
   }, [points, filter]);
 
@@ -139,7 +139,7 @@ export default function AdminPage() {
       all: points.length,
       img_only: points.filter((p) => p.has_image && !p.has_video).length,
       video_only: points.filter((p) => !p.has_image && p.has_video).length,
-      completed: points.filter((p) => p.has_image && p.has_video).length,
+      completed: points.filter((p) => p.has_image || p.has_video).length,
     }),
     [points],
   );
@@ -152,8 +152,7 @@ export default function AdminPage() {
       hasImageAlt: points.filter((p) => p.has_image_alt).length,
       hasVideo: points.filter((p) => p.has_video).length,
       hasVideoAlt: points.filter((p) => p.has_video_alt).length,
-      completed: points.filter((p) => p.has_image && p.has_video).length,
-      partial: points.filter((p) => getPointState(p.has_image, p.has_video) === 'partial').length,
+      completed: points.filter((p) => p.has_image || p.has_video).length,
     }),
     [points],
   );
@@ -305,14 +304,13 @@ export default function AdminPage() {
 
       <main className="p-6 max-w-[1600px] mx-auto">
         {/* 统计概览 */}
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
           <StatCard label="总点位数" value={stats.total} color="text-base-100" />
           <StatCard label="主图片" value={stats.hasImage} color="text-accent" />
           <StatCard label="备选图片" value={stats.hasImageAlt} color="text-status-yellow" />
           <StatCard label="主视频" value={stats.hasVideo} color="text-accent" />
           <StatCard label="备选视频" value={stats.hasVideoAlt} color="text-status-yellow" />
-          <StatCard label="部分完成" value={stats.partial} color="text-status-yellow" />
-          <StatCard label="主图+主视频" value={stats.completed} color="text-status-green" />
+          <StatCard label="已完成" value={stats.completed} color="text-status-green" />
         </div>
 
         {/* 批量下载工具栏（含点位选择操作） */}

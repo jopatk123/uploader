@@ -37,7 +37,7 @@ export default function UploadPage() {
   }, [loadPoints]);
 
   const selectedPoint = points.find((p) => p.id === selectedId) || null;
-  const completedCount = points.filter((p) => p.has_image && p.has_video).length;
+  const completedCount = points.filter((p) => p.has_image || p.has_video).length;
   const completedPercent =
     points.length > 0 ? Math.round((completedCount / points.length) * 100) : 0;
 

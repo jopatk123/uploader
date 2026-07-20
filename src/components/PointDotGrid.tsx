@@ -1,6 +1,6 @@
 /**
  * 点位状态点阵组件
- * 140个圆点：绿色=主图+主视频全部完成，黄色=仅上传其一，红色=均未上传
+ * 140个圆点：绿色=主图或主视频至少一项已上传，红色=均未上传
  * 点阵上方增加按区域（区县）分组的统计，一眼看出各区域完成进度
  * 点击区域卡片可高亮闪烁该区域对应的点位
  */
@@ -20,18 +20,15 @@ interface RegionStat {
   name: string;
   total: number;
   completed: number;
-  partial: number;
 }
 
 // 状态 → 圆点背景色 / 光晕颜色
 const STATE_BG: Record<PointState, string> = {
   complete: 'bg-status-green',
-  partial: 'bg-status-yellow',
   empty: 'bg-status-red',
 };
 const STATE_GLOW: Record<PointState, string> = {
   complete: '0 0 6px #22c55e88',
-  partial: '0 0 6px #f59e0b88',
   empty: '0 0 6px #ef444488',
 };
 
@@ -45,10 +42,7 @@ export default function PointDotGrid({
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [highlightedDistrict, setHighlightedDistrict] = useState<string | null>(null);
 
-  const completedCount = points.filter((p) => p.has_image && p.has_video).length;
-  const partialCount = points.filter(
-    (p) => getPointState(p.has_image, p.has_video) === 'partial',
-  ).length;
+  const completedCount = points.filter((p) => p.has_image || p.has_video).length;
 
   // 按区县分组统计
   const regionStats = useMemo<RegionStat[]>(() => {
@@ -56,13 +50,12 @@ export default function PointDotGrid({
     for (const p of points) {
       let stat = map.get(p.district);
       if (!stat) {
-        stat = { name: p.district, total: 0, completed: 0, partial: 0 };
+        stat = { name: p.district, total: 0, completed: 0 };
         map.set(p.district, stat);
       }
       stat.total++;
       const state = getPointState(p.has_image, p.has_video);
       if (state === 'complete') stat.completed++;
-      else if (state === 'partial') stat.partial++;
     }
     // 按总数降序排列
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
@@ -79,12 +72,12 @@ export default function PointDotGrid({
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h3 className="font-mono text-sm text-base-200">
-            点位状态总览
-            <span className="ml-2 text-base-400">
-              完成 {completedCount} · 部分 {partialCount} · 共 {points.length}
-            </span>
-            <span className="ml-2 text-accent font-bold">{totalPercent}%</span>
-          </h3>
+              点位状态总览
+              <span className="ml-2 text-base-400">
+                完成 {completedCount} · 共 {points.length}
+              </span>
+              <span className="ml-2 text-accent font-bold">{totalPercent}%</span>
+            </h3>
           {onDownloadStats && (
             <button
               onClick={onDownloadStats}
@@ -102,11 +95,7 @@ export default function PointDotGrid({
         <div className="flex items-center gap-4 text-xs text-base-300">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-status-green"></span>
-            全部完成
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-status-yellow"></span>
-            部分完成
+            已完成
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-status-red"></span>
@@ -120,12 +109,8 @@ export default function PointDotGrid({
         {regionStats.map((r) => {
           const percent = r.total > 0 ? Math.round((r.completed / r.total) * 100) : 0;
           const isAllDone = r.completed === r.total;
-          // 区域整体状态：全部完成→绿；存在部分完成→黄；否则→青
-          const barColor = isAllDone
-            ? 'bg-status-green'
-            : r.partial > 0
-              ? 'bg-status-yellow'
-              : 'bg-accent';
+          // 区域整体状态：全部完成→绿；否则→青
+          const barColor = isAllDone ? 'bg-status-green' : 'bg-accent';
           const isActive = highlightedDistrict === r.name;
           return (
             <button
@@ -153,9 +138,7 @@ export default function PointDotGrid({
                 />
               </div>
               <div className="mt-1 text-[10px] text-base-400 font-mono">
-                {isAllDone
-                  ? '已完成'
-                  : `缺 ${r.total - r.completed} 个${r.partial > 0 ? ` · 部分 ${r.partial}` : ''}`}
+                {isAllDone ? '已完成' : `缺 ${r.total - r.completed} 个`}
               </div>
             </button>
           );
