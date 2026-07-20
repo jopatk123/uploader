@@ -27,18 +27,20 @@ export function formatBeijingTime(utcStr: string | null | undefined): string {
 }
 
 /**
- * 点位上传状态
- * - complete: 主图 或 主视频 至少有一项已上传
- * - empty:    均未上传
+ * 点位上传状态（仅用于圆点/UI 颜色区分，不影响完成百分比统计）
+ * - complete: 主图 + 主视频 均已上传（绿色）
+ * - partial:  仅上传其中之一（黄色，统计上也算完成）
+ * - empty:    均未上传（红色）
  */
-export type PointState = 'complete' | 'empty';
+export type PointState = 'complete' | 'partial' | 'empty';
 
 /**
  * 依据主图 / 主视频上传情况判定点位状态
- * 仅基于 has_image 与 has_video，与备选素材无关，与全项目完成判定保持一致
- * 主图或主视频只要有一个上传成功，即视为完成
+ * 仅基于 has_image 与 has_video，与备选素材无关
+ * 统计完成百分比使用 has_image || has_video，即 partial 也计入完成
  */
 export function getPointState(hasImage: boolean, hasVideo: boolean): PointState {
-  if (hasImage || hasVideo) return 'complete';
+  if (hasImage && hasVideo) return 'complete';
+  if (hasImage || hasVideo) return 'partial';
   return 'empty';
 }

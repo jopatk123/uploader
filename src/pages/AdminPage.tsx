@@ -18,7 +18,7 @@ import {
   clearToken,
 } from '@/lib/api';
 import type { PointStatus, PointDetail, MaterialType } from '@/types';
-import { formatBeijingTime } from '@/lib/utils';
+import { getPointState, formatBeijingTime } from '@/lib/utils';
 
 type FilterType = 'all' | 'img_only' | 'video_only' | 'completed';
 
@@ -153,6 +153,7 @@ export default function AdminPage() {
       hasVideo: points.filter((p) => p.has_video).length,
       hasVideoAlt: points.filter((p) => p.has_video_alt).length,
       completed: points.filter((p) => p.has_image || p.has_video).length,
+      partial: points.filter((p) => getPointState(p.has_image, p.has_video) === 'partial').length,
     }),
     [points],
   );
@@ -304,12 +305,13 @@ export default function AdminPage() {
 
       <main className="p-6 max-w-[1600px] mx-auto">
         {/* 统计概览 */}
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
           <StatCard label="总点位数" value={stats.total} color="text-base-100" />
           <StatCard label="主图片" value={stats.hasImage} color="text-accent" />
           <StatCard label="备选图片" value={stats.hasImageAlt} color="text-status-yellow" />
           <StatCard label="主视频" value={stats.hasVideo} color="text-accent" />
           <StatCard label="备选视频" value={stats.hasVideoAlt} color="text-status-yellow" />
+          <StatCard label="部分完成" value={stats.partial} color="text-status-yellow" />
           <StatCard label="已完成" value={stats.completed} color="text-status-green" />
         </div>
 
