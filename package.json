@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
-    "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
+    "dev": "concurrently \"pnpm run client:dev\" \"pnpm run server:dev\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "archiver": "^7.0.1",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^13.0.3",
     "browser-image-compression": "^2.0.2",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",

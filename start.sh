@@ -1,22 +1,41 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FRONTEND_PORT=5173
 BACKEND_PORT=3001
 
+cd "$PROJECT_DIR"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "Error: pnpm not found. Install it first: npm install -g pnpm" >&2
+  exit 1
+fi
+
 echo "==> Cleaning up old development server processes..."
 
-# Kill processes on frontend port (Vite)
-lsof -ti :$FRONTEND_PORT 2>/dev/null | xargs kill -9 2>/dev/null && echo "    Killed process on port $FRONTEND_PORT" || true
+kill_port() {
+  local port="$1" pids
+  pids="$(lsof -ti ":$port" 2>/dev/null || true)"
+  if [ -n "$pids" ]; then
+    # 先尝试优雅退出，超时后强制杀掉
+    kill $pids 2>/dev/null || true
+    sleep 1
+    pids="$(lsof -ti ":$port" 2>/dev/null || true)"
+    if [ -n "$pids" ]; then
+      kill -9 $pids 2>/dev/null || true
+    fi
+    echo "    Killed process on port $port"
+  fi
+}
 
-# Kill processes on backend port (Express)
-lsof -ti :$BACKEND_PORT 2>/dev/null | xargs kill -9 2>/dev/null && echo "    Killed process on port $BACKEND_PORT" || true
+kill_port "$FRONTEND_PORT"
+kill_port "$BACKEND_PORT"
 
-# Kill any leftover nodemon / tsx processes for this project
-pkill -f "nodemon.*$PROJECT_DIR" 2>/dev/null && echo "    Killed nodemon processes" || true
-pkill -f "tsx.*api/server" 2>/dev/null && echo "    Killed tsx server processes" || true
+if [ ! -d node_modules ]; then
+  echo "==> Installing dependencies..."
+  pnpm install
+fi
 
 echo "==> Starting development server..."
-cd "$PROJECT_DIR"
-npm run dev
+exec pnpm run dev
